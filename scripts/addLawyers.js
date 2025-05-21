@@ -20,3 +20,4 @@ addLawyersDirectly()
     // Явно завершаем процесс, чтобы он не висел
     setTimeout(() => process.exit(0), 1000);
   }); 
+ 

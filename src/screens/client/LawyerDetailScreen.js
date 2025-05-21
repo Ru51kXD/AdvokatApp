@@ -9,6 +9,8 @@ import {
   ActivityIndicator,
   Alert,
   Linking,
+  FlatList,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -29,6 +31,7 @@ const LawyerDetailScreen = ({ route, navigation }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [creatingChat, setCreatingChat] = useState(false);
+  const [showAllReviews, setShowAllReviews] = useState(false);
 
   const fetchLawyerDetails = useCallback(async () => {
     console.log('Fetching lawyer details with ID:', lawyerId);
@@ -193,6 +196,29 @@ const LawyerDetailScreen = ({ route, navigation }) => {
     return 'лет';
   };
 
+  // Rendering individual review
+  const renderReview = (review, index) => (
+    <Card key={review.id || index} style={styles.reviewCard}>
+      <View style={styles.reviewHeader}>
+        <Text style={styles.reviewAuthor}>{review.client_name || 'Клиент'}</Text>
+        <Text style={styles.ratingStars}>
+          {'★'.repeat(review.rating)}{'☆'.repeat(5 - review.rating)}
+        </Text>
+      </View>
+      {review.comment && (
+        <Text style={styles.reviewText}>{review.comment}</Text>
+      )}
+      <Text style={styles.reviewDate}>
+        {review.created_at ? new Date(review.created_at).toLocaleDateString('ru-RU') : 'Нет даты'}
+      </Text>
+    </Card>
+  );
+
+  // Toggle view all reviews
+  const toggleAllReviews = () => {
+    setShowAllReviews(!showAllReviews);
+  };
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -287,27 +313,22 @@ const LawyerDetailScreen = ({ route, navigation }) => {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Отзывы ({lawyer.reviews.length})</Text>
             
-            {lawyer.reviews.slice(0, 3).map((review, index) => (
-              <Card key={review.id || index} style={styles.reviewCard}>
-                <View style={styles.reviewHeader}>
-                  <Text style={styles.reviewAuthor}>{review.client_name}</Text>
-                  <Text style={styles.ratingStars}>
-                    {'★'.repeat(review.rating)}{'☆'.repeat(5 - review.rating)}
-                  </Text>
-                </View>
-                {review.comment && (
-                  <Text style={styles.reviewText}>{review.comment}</Text>
-                )}
-                <Text style={styles.reviewDate}>
-                  {new Date(review.created_at || new Date()).toLocaleDateString('ru-RU')}
-                </Text>
-              </Card>
-            ))}
+            {/* Показываем первые 3 отзыва или все, если включен режим "показать все" */}
+            {(showAllReviews ? lawyer.reviews : lawyer.reviews.slice(0, 3)).map((review, index) => 
+              renderReview(review, index)
+            )}
             
+            {/* Кнопка для показа всех отзывов */}
             {lawyer.reviews.length > 3 && (
-              <TouchableOpacity style={styles.moreReviews}>
+              <TouchableOpacity 
+                style={styles.moreReviews} 
+                onPress={toggleAllReviews}
+              >
                 <Text style={styles.moreReviewsText}>
-                  Показать все отзывы ({lawyer.reviews.length})
+                  {showAllReviews 
+                    ? "Скрыть отзывы" 
+                    : `Показать все отзывы (${lawyer.reviews.length})`
+                  }
                 </Text>
               </TouchableOpacity>
             )}
@@ -339,6 +360,30 @@ const LawyerDetailScreen = ({ route, navigation }) => {
           </View>
         </View>
       </ScrollView>
+      
+      {/* Модальное окно для всех отзывов (альтернативный вариант отображения) */}
+      {/* <Modal
+        visible={showAllReviews}
+        animationType="slide"
+        transparent={false}
+        onRequestClose={toggleAllReviews}
+      >
+        <SafeAreaView style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Все отзывы ({lawyer?.reviews?.length || 0})</Text>
+            <TouchableOpacity onPress={toggleAllReviews} style={styles.closeButton}>
+              <Ionicons name="close" size={24} color={COLORS.text} />
+            </TouchableOpacity>
+          </View>
+          
+          <FlatList
+            data={lawyer?.reviews || []}
+            keyExtractor={(item, index) => String(item.id || index)}
+            renderItem={({ item, index }) => renderReview(item, index)}
+            contentContainerStyle={styles.reviewsList}
+          />
+        </SafeAreaView>
+      </Modal> */}
     </SafeAreaView>
   );
 };
@@ -447,6 +492,7 @@ const styles = StyleSheet.create({
   },
   reviewCard: {
     marginBottom: 12,
+    padding: 12,
   },
   reviewHeader: {
     flexDirection: 'row',
@@ -463,6 +509,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: COLORS.text,
     marginBottom: 8,
+    lineHeight: 20,
   },
   reviewDate: {
     fontSize: 12,
@@ -470,8 +517,11 @@ const styles = StyleSheet.create({
     textAlign: 'right',
   },
   moreReviews: {
-    padding: 8,
+    padding: 12,
     alignItems: 'center',
+    backgroundColor: COLORS.lightGrey,
+    borderRadius: 8,
+    marginTop: 8,
   },
   moreReviewsText: {
     color: COLORS.primary,
@@ -493,6 +543,31 @@ const styles = StyleSheet.create({
     flex: 0.48,
     marginBottom: 0,
   },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: COLORS.background,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.lightGrey,
+    backgroundColor: COLORS.white,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: COLORS.text,
+  },
+  closeButton: {
+    padding: 8,
+  },
+  reviewsList: {
+    padding: 16,
+  },
 });
 
 export default LawyerDetailScreen; 
+ 

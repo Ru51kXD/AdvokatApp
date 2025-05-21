@@ -81,9 +81,9 @@ export const LawyerService = {
         console.log('Filters applied:', JSON.stringify(filters));
         
         // Поиск по имени или специализации
-        if (filters.query) {
+        if (filters.query && filters.query.trim() !== '') {
+          const searchTerm = `%${filters.query.trim()}%`;
           query += ` AND (u.username LIKE ? OR l.specialization LIKE ? OR l.bio LIKE ? OR l.city LIKE ?)`;
-          const searchTerm = `%${filters.query}%`;
           queryParams.push(searchTerm, searchTerm, searchTerm, searchTerm);
         }
         
@@ -147,69 +147,82 @@ export const LawyerService = {
           }
         }
         
-        query += ` ORDER BY l.rating DESC LIMIT 20`;
+        // Увеличиваем лимит, чтобы гарантировать больше результатов
+        query += ` ORDER BY l.rating DESC LIMIT 50`;
         
         console.log('SQL Query:', query);
         console.log('Query params:', queryParams);
 
         try {
-          if (typeof db.transaction !== 'function') {
-            // Fallback to direct query if transaction is not available
-            console.log('Transaction not available, using direct query instead');
-            const result = await executeQuery(query, queryParams);
-            resolve(result || []);
+          // Сначала попробуем прямой запрос для большей надежности
+          const result = await executeQuery(query, queryParams);
+          if (result && result.length > 0) {
+            console.log(`Direct query returned ${result.length} lawyers`);
+            resolve(result);
             return;
           }
           
-          db.transaction(
-            (tx) => {
-              tx.executeSql(
-                query,
-                queryParams,
-                (_, { rows }) => {
-                  const lawyers = [];
-                  console.log(`DB returned ${rows.length} rows`);
-                  
-                  for (let i = 0; i < rows.length; i++) {
-                    const lawyer = rows.item(i);
-                    console.log(`Processing lawyer ${i+1}:`, lawyer.id, lawyer.username);
-                    lawyers.push({
-                      id: lawyer.id,
-                      user_id: lawyer.user_id,
-                      username: lawyer.username,
-                      specialization: lawyer.specialization,
-                      experience: lawyer.experience,
-                      price_range: lawyer.price_range,
-                      bio: lawyer.bio,
-                      rating: lawyer.rating,
-                      city: lawyer.city,
-                      address: lawyer.address,
-                      email: lawyer.email,
-                      phone: lawyer.phone
-                    });
+          // Если прямой запрос не дал результатов или failed, пробуем transaction API
+          if (typeof db.transaction === 'function') {
+            db.transaction(
+              (tx) => {
+                tx.executeSql(
+                  query,
+                  queryParams,
+                  (_, { rows }) => {
+                    const lawyers = [];
+                    console.log(`DB returned ${rows.length} rows`);
+                    
+                    for (let i = 0; i < rows.length; i++) {
+                      const lawyer = rows.item(i);
+                      console.log(`Processing lawyer ${i+1}:`, lawyer.id, lawyer.username);
+                      lawyers.push({
+                        id: lawyer.id,
+                        user_id: lawyer.user_id,
+                        username: lawyer.username,
+                        specialization: lawyer.specialization,
+                        experience: lawyer.experience,
+                        price_range: lawyer.price_range,
+                        bio: lawyer.bio,
+                        rating: lawyer.rating,
+                        city: lawyer.city,
+                        address: lawyer.address,
+                        email: lawyer.email,
+                        phone: lawyer.phone
+                      });
+                    }
+                    
+                    console.log(`Returning ${lawyers.length} lawyers`);
+                    resolve(lawyers);
+                  },
+                  (_, error) => {
+                    console.error('SQL Error in getLawyers:', error);
+                    // Если транзакция не удалась, возвращаем пустой массив вместо ошибки
+                    console.log('Returning empty array after SQL error');
+                    resolve([]);
                   }
-                  
-                  console.log(`Returning ${lawyers.length} lawyers`);
-                  resolve(lawyers);
-                },
-                (_, error) => {
-                  console.error('SQL Error in getLawyers:', error);
-                  reject(`Error executing query: ${error.message || error}`);
-                }
-              );
-            },
-            (txError) => {
-              console.error('Transaction error in getLawyers:', txError);
-              reject(`Database transaction failed: ${txError.message || txError}`);
-            }
-          );
+                );
+              },
+              (txError) => {
+                console.error('Transaction error in getLawyers:', txError);
+                // Если транзакция не удалась, возвращаем пустой массив вместо ошибки
+                console.log('Returning empty array after transaction error');
+                resolve([]);
+              }
+            );
+          } else {
+            console.log('Transaction not available, but direct query returned no results');
+            resolve([]);
+          }
         } catch (e) {
           console.error('Exception in getLawyers:', e);
-          reject(`Exception: ${e.message || e}`);
+          // В случае ошибки возвращаем пустой массив
+          resolve([]);
         }
       } catch (error) {
         console.error('Error checking lawyers count:', error);
-        reject(`Exception: ${error.message || error}`);
+        // В случае ошибки возвращаем пустой массив
+        resolve([]);
       }
     });
   },
@@ -541,3 +554,4 @@ export const LawyerService = {
     }
   }
 }; 
+ 
