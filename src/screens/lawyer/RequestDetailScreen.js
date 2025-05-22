@@ -8,6 +8,7 @@ import {
   Alert,
   TouchableOpacity,
   TextInput,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
@@ -18,6 +19,8 @@ import Card from '../../components/Card';
 import Button from '../../components/Button';
 import { RequestService } from '../../services/RequestService';
 import { useAuth } from '../../contexts/AuthContext';
+import ChatService from '../../services/ChatService';
+import { LawyerService } from '../../services/LawyerService';
 
 const LawyerRequestDetailScreen = ({ route, navigation }) => {
   const { requestId } = route.params;
@@ -29,6 +32,8 @@ const LawyerRequestDetailScreen = ({ route, navigation }) => {
   const [responseMessage, setResponseMessage] = useState('');
   const [hasResponded, setHasResponded] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [showMessageModal, setShowMessageModal] = useState(false);
+  const [directMessage, setDirectMessage] = useState('');
 
   const fetchRequestDetails = useCallback(async () => {
     if (!requestId) {
@@ -110,11 +115,8 @@ const LawyerRequestDetailScreen = ({ route, navigation }) => {
       setHasResponded(true);
       setResponseMessage('');
       
-      Alert.alert(
-        'Успешно',
-        'Ваш отклик отправлен клиенту и добавлен в список откликов',
-        [{ text: 'OK' }]
-      );
+      // Предлагаем отправить личное сообщение клиенту
+      setShowMessageModal(true);
     } catch (err) {
       console.error('Ошибка при отправке отклика:', err);
       Alert.alert(
@@ -124,6 +126,58 @@ const LawyerRequestDetailScreen = ({ route, navigation }) => {
       );
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  // Отправка личного сообщения клиенту
+  const handleSendDirectMessage = async () => {
+    if (!directMessage.trim()) {
+      Alert.alert('Ошибка', 'Введите текст сообщения');
+      return;
+    }
+    
+    try {
+      // Получаем ID отправителя (юриста)
+      const senderId = user?.id || 999;
+      
+      // Получаем ID получателя (клиента)
+      const receiverId = request.client_id;
+      
+      // Отправляем сообщение
+      const result = await ChatService.sendMessage(
+        senderId,
+        receiverId,
+        directMessage,
+        requestId
+      );
+      
+      // Получаем ID созданной или существующей беседы
+      const conversationId = result.conversation.id;
+      
+      Alert.alert(
+        'Успешно',
+        'Ваше сообщение отправлено клиенту!',
+        [
+          { 
+            text: 'Перейти в чат', 
+            onPress: () => {
+              navigation.navigate('Chat', { 
+                conversationId: conversationId,
+                title: request.client_name || 'Клиент',
+                requestId: requestId
+              });
+            } 
+          },
+          { text: 'ОК', style: 'cancel' }
+        ]
+      );
+      
+      // Закрываем модальное окно
+      setShowMessageModal(false);
+      setDirectMessage('');
+    } catch (error) {
+      console.error('Ошибка при отправке сообщения:', error);
+      Alert.alert('Ошибка', 'Не удалось отправить сообщение. Попробуйте позже.');
     }
   };
 
@@ -188,6 +242,11 @@ const LawyerRequestDetailScreen = ({ route, navigation }) => {
           <Text style={styles.respondedText}>
             Вы уже отправили отклик на эту заявку
           </Text>
+          <Button
+            title="Написать сообщение клиенту"
+            onPress={() => setShowMessageModal(true)}
+            style={styles.messageButton}
+          />
         </View>
       );
     }
@@ -407,6 +466,52 @@ const LawyerRequestDetailScreen = ({ route, navigation }) => {
           <Text style={styles.refreshText}>Обновить</Text>
         </TouchableOpacity>
       </ScrollView>
+      
+      {/* Модальное окно для отправки сообщения */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={showMessageModal}
+        onRequestClose={() => setShowMessageModal(false)}
+      >
+        <View style={styles.centeredView}>
+          <View style={styles.modalView}>
+            <Text style={styles.modalTitle}>Сообщение клиенту</Text>
+            <Text style={styles.modalSubtitle}>
+              Напишите личное сообщение клиенту, чтобы обсудить детали заявки
+            </Text>
+            
+            <TextInput
+              style={styles.messageInput}
+              placeholder="Введите сообщение..."
+              value={directMessage}
+              onChangeText={setDirectMessage}
+              multiline
+              numberOfLines={4}
+            />
+            
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={() => {
+                  setShowMessageModal(false);
+                  setDirectMessage('');
+                }}
+              >
+                <Text style={styles.cancelButtonText}>Отмена</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[styles.modalButton, styles.sendButton, !directMessage.trim() && styles.disabledButton]}
+                onPress={handleSendDirectMessage}
+                disabled={!directMessage.trim()}
+              >
+                <Text style={styles.sendButtonText}>Отправить</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -705,6 +810,79 @@ const styles = StyleSheet.create({
   yourResponseText: {
     color: COLORS.primary,
     fontWeight: 'bold',
+  },
+  messageButton: {
+    marginTop: 16,
+    backgroundColor: COLORS.primaryLight,
+  },
+  centeredView: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  modalView: {
+    width: '90%',
+    backgroundColor: 'white',
+    borderRadius: 20,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 8,
+    color: COLORS.text,
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    marginBottom: 16,
+    color: COLORS.textSecondary,
+  },
+  messageInput: {
+    borderWidth: 1,
+    borderColor: COLORS.lightGrey,
+    borderRadius: 8,
+    padding: 12,
+    minHeight: 100,
+    textAlignVertical: 'top',
+    marginBottom: 16,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  modalButton: {
+    flex: 1,
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  cancelButton: {
+    backgroundColor: COLORS.lightGrey,
+    marginRight: 8,
+  },
+  sendButton: {
+    backgroundColor: COLORS.primary,
+    marginLeft: 8,
+  },
+  disabledButton: {
+    opacity: 0.6,
+  },
+  cancelButtonText: {
+    color: COLORS.text,
+    fontWeight: '500',
+  },
+  sendButtonText: {
+    color: COLORS.white,
+    fontWeight: '500',
   },
 });
 

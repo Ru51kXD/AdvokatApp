@@ -58,13 +58,10 @@ const LawyerProfileScreen = ({ route, navigation }) => {
         firstMessage
       );
       
-      // Выбираем наилучший вариант отображаемого имени адвоката
-      const lawyerName = lawyer.name || lawyer.username || 'Адвокат';
-      
       // Переходим к экрану чата
       navigation.navigate('ChatScreen', {
-        conversationId: result.conversationId,
-        title: lawyerName,
+        conversationId: result.conversation.id,
+        title: lawyer.username || 'Адвокат',
         guestId: !authState.isAuthenticated ? senderId : null
       });
     } catch (error) {

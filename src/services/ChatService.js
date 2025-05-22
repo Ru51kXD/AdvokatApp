@@ -1,5 +1,6 @@
 import { db } from '../database/database';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { LawyerService } from './LawyerService';
 
 // Storage keys
 const STORAGE_KEYS = {
@@ -544,125 +545,182 @@ const ChatService = {
   },
   
   // Отправка нового сообщения с поддержкой AsyncStorage
-  sendMessage: async (senderId, receiverId, message, requestId = null) => {
+  sendMessage: async (senderId, receiverId, text, requestId, attachment, image) => {
     try {
-      console.log('ChatService.sendMessage - Starting with:', { senderId, receiverId, message });
+      console.log('Sending message:', { senderId, receiverId, text, requestId, hasAttachment: !!attachment, hasImage: !!image });
       
-      // Initialize storage if needed
+      // Инициализируем хранилище, если нужно
       await initChatStorage();
       
-      // Проверка, является ли отправитель гостем
-      const isGuestSender = senderId.toString().startsWith('guest_');
+      // Получаем текущие сообщения и беседы
+      const messagesJson = await AsyncStorage.getItem(STORAGE_KEYS.MESSAGES);
+      const conversationsJson = await AsyncStorage.getItem(STORAGE_KEYS.CONVERSATIONS);
       
-      // Get users to determine their types
-      const users = JSON.parse(await AsyncStorage.getItem('users')) || [];
-      console.log('ChatService.sendMessage - Found users:', users.length);
+      const messages = JSON.parse(messagesJson) || [];
+      const conversations = JSON.parse(conversationsJson) || [];
       
-      // Если отправитель гость, создаем для него временный объект пользователя
-      let sender, receiver;
-      
-      if (isGuestSender) {
-        sender = {
-          id: senderId,
-          username: 'Гость',
-          user_type: 'client',
-          is_guest: true
-        };
-      } else {
-        sender = users.find(u => u.id === senderId);
-      }
-      
-      receiver = users.find(u => u.id === receiverId);
-      
-      console.log('ChatService.sendMessage - Users:', { 
-        sender: sender ? { id: sender.id, type: sender.user_type, isGuest: isGuestSender } : null, 
-        receiver: receiver ? { id: receiver.id, type: receiver.user_type } : null 
-      });
-      
-      if (!sender) {
-        const error = `Sender not found (senderId: ${senderId})`;
-        console.error(error);
-        throw new Error(error);
-      }
-      
-      if (!receiver) {
-        const error = `Receiver not found (receiverId: ${receiverId})`;
-        console.error(error);
-        throw new Error(error);
-      }
-      
-      // Determine who is client and who is lawyer
-      let clientId, lawyerId;
-      if (sender.user_type === 'client') {
-        clientId = senderId;
-        lawyerId = receiverId;
-      } else {
-        clientId = receiverId;
-        lawyerId = senderId;
-      }
-      
-      console.log('ChatService.sendMessage - Determined roles:', { clientId, lawyerId });
-      
-      // Create message
+      // Получаем следующий ID сообщения
       const messageId = await getNextId(STORAGE_KEYS.MESSAGE_ID_COUNTER);
-      const newMessage = {
-        id: messageId,
-        sender_id: senderId,
-        receiver_id: receiverId,
-        request_id: requestId,
-        message: message,
-        read: false,
-        created_at: new Date().toISOString(),
-        is_from_guest: isGuestSender
-      };
       
-      // Save message
-      const messages = JSON.parse(await AsyncStorage.getItem(STORAGE_KEYS.MESSAGES)) || [];
-      messages.push(newMessage);
-      await AsyncStorage.setItem(STORAGE_KEYS.MESSAGES, JSON.stringify(messages));
+      // Определяем, кто клиент, а кто адвокат
+      let clientId, lawyerId, clientName, lawyerName;
       
-      // Check if conversation exists
-      const conversations = JSON.parse(await AsyncStorage.getItem(STORAGE_KEYS.CONVERSATIONS)) || [];
+      // Проверяем, существует ли беседа для этих пользователей
       let conversation = conversations.find(c => 
-        c.client_id === clientId && c.lawyer_id === lawyerId
+        (c.client_id === senderId && c.lawyer_id === receiverId) || 
+        (c.client_id === receiverId && c.lawyer_id === senderId)
       );
       
-      let conversationId;
+      // Получаем информацию о пользователях
+      try {
+        // Проверяем, это гостевое сообщение или от зарегистрированного пользователя
+        const isGuestSender = String(senderId).startsWith('guest_');
+        const isGuestReceiver = String(receiverId).startsWith('guest_');
+        
+        if (isGuestSender) {
+          // Если отправитель гость, то получатель должен быть адвокатом
+          clientId = senderId;
+          lawyerId = receiverId;
+          clientName = 'Гость';
+          
+          // Пытаемся получить имя адвоката
+          const lawyerInfo = await LawyerService.getLawyerProfile(receiverId);
+          lawyerName = lawyerInfo?.username || 'Адвокат';
+        } else if (isGuestReceiver) {
+          // Если получатель гость, то отправитель должен быть адвокатом
+          clientId = receiverId;
+          lawyerId = senderId;
+          clientName = 'Гость';
+          
+          // Пытаемся получить имя адвоката
+          const lawyerInfo = await LawyerService.getLawyerProfile(senderId);
+          lawyerName = lawyerInfo?.username || 'Адвокат';
+        } else {
+          // Проверяем, кто клиент, а кто адвокат
+          const { getUserType } = await import('../database/database');
+          const senderType = await getUserType(senderId);
+          
+          if (senderType === 'client') {
+            clientId = senderId;
+            lawyerId = receiverId;
+            
+            // Получаем имена пользователей
+            const { getUserById } = await import('../database/database');
+            const clientInfo = await getUserById(senderId);
+            const lawyerInfo = await LawyerService.getLawyerProfile(receiverId);
+            
+            clientName = clientInfo?.username || 'Клиент';
+            lawyerName = lawyerInfo?.username || 'Адвокат';
+          } else {
+            clientId = receiverId;
+            lawyerId = senderId;
+            
+            // Получаем имена пользователей
+            const { getUserById } = await import('../database/database');
+            const clientInfo = await getUserById(receiverId);
+            const lawyerInfo = await LawyerService.getLawyerProfile(senderId);
+            
+            clientName = clientInfo?.username || 'Клиент';
+            lawyerName = lawyerInfo?.username || 'Адвокат';
+          }
+        }
+      } catch (err) {
+        console.error('Error getting user information:', err);
+        // Используем данные по умолчанию
+        if (String(senderId).startsWith('guest_') || String(receiverId).startsWith('guest_')) {
+          // Если один из пользователей гость
+          const isGuestSender = String(senderId).startsWith('guest_');
+          clientId = isGuestSender ? senderId : receiverId;
+          lawyerId = isGuestSender ? receiverId : senderId;
+          clientName = 'Гость';
+          lawyerName = 'Адвокат';
+        } else {
+          // По умолчанию предполагаем, что отправитель - клиент
+          clientId = senderId;
+          lawyerId = receiverId;
+          clientName = 'Клиент';
+          lawyerName = 'Адвокат';
+        }
+      }
       
-      if (conversation) {
-        // Update existing conversation
-        console.log('ChatService.sendMessage - Updating existing conversation:', conversation.id);
-        conversationId = conversation.id;
-        conversation.last_message_id = messageId;
-        conversation.unread_count = (conversation.unread_count || 0) + 1;
-        conversation.updated_at = new Date().toISOString();
-        conversation.has_guest = isGuestSender || conversation.has_guest;
+      // Проверяем, существует ли беседа между этими пользователями
+      if (!conversation) {
+        // Создаем новую беседу
+        const conversationId = await getNextId(STORAGE_KEYS.CONVERSATION_ID_COUNTER);
         
-        // Save updated conversations
-        await AsyncStorage.setItem(STORAGE_KEYS.CONVERSATIONS, JSON.stringify(conversations));
-      } else {
-        // Create new conversation
-        conversationId = await getNextId(STORAGE_KEYS.CONVERSATION_ID_COUNTER);
-        console.log('ChatService.sendMessage - Creating new conversation:', conversationId);
-        
-        const newConversation = {
+        conversation = {
           id: conversationId,
           client_id: clientId,
           lawyer_id: lawyerId,
-          request_id: requestId,
+          client_name: clientName,
+          lawyer_name: lawyerName,
           last_message_id: messageId,
-          unread_count: 1,
+          unread_count: 1, // У получателя будет 1 непрочитанное сообщение
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
-          has_guest: isGuestSender
+          has_guest: String(clientId).startsWith('guest_'),
+          request_id: requestId || null,
+          request_title: requestId ? 'Заявка №' + requestId : null
         };
         
-        conversations.push(newConversation);
-        await AsyncStorage.setItem(STORAGE_KEYS.CONVERSATIONS, JSON.stringify(conversations));
+        conversations.push(conversation);
+      } else {
+        // Обновляем существующую беседу
+        conversation.last_message_id = messageId;
+        conversation.updated_at = new Date().toISOString();
+        
+        // Увеличиваем счетчик непрочитанных для получателя
+        if (receiverId !== senderId) {
+          conversation.unread_count = (conversation.unread_count || 0) + 1;
+        }
+        
+        // Обновляем беседу в массиве
+        const conversationIndex = conversations.findIndex(c => c.id === conversation.id);
+        if (conversationIndex !== -1) {
+          conversations[conversationIndex] = conversation;
+        }
       }
       
-      console.log('ChatService.sendMessage - Success:', { messageId, conversationId });
-      return { messageId, conversationId };
+      // Создаем новое сообщение
+      const newMessage = {
+        id: messageId,
+        conversation_id: conversation.id,
+        sender_id: senderId,
+        receiver_id: receiverId,
+        message: text || '',
+        read: false,
+        delivered: true, // Сообщение доставлено, но не прочитано
+        created_at: new Date().toISOString(),
+        is_from_guest: String(senderId).startsWith('guest_')
+      };
+      
+      // Добавляем вложения, если они есть
+      if (attachment) {
+        newMessage.attachment = typeof attachment === 'string' 
+          ? attachment 
+          : attachment.uri || attachment.name || 'file';
+        
+        if (attachment.type) {
+          newMessage.attachment_type = attachment.type;
+        }
+        
+        if (attachment.name) {
+          newMessage.attachment_name = attachment.name;
+        }
+      }
+      
+      if (image) {
+        newMessage.image = image;
+      }
+      
+      // Добавляем сообщение в массив
+      messages.push(newMessage);
+      
+      // Сохраняем обновленные данные
+      await AsyncStorage.setItem(STORAGE_KEYS.MESSAGES, JSON.stringify(messages));
+      await AsyncStorage.setItem(STORAGE_KEYS.CONVERSATIONS, JSON.stringify(conversations));
+      
+      return { message: newMessage, conversation };
     } catch (error) {
       console.error('Error sending message:', error);
       throw error;
@@ -708,45 +766,64 @@ const ChatService = {
   // Отметить сообщения как прочитанные
   markMessagesAsRead: async (conversationId, userId) => {
     try {
-      await initChatStorage();
+      // Получаем текущие сообщения
+      const messagesJson = await AsyncStorage.getItem(STORAGE_KEYS.MESSAGES);
+      const messages = JSON.parse(messagesJson) || [];
       
-      // Get conversation
-      const conversations = JSON.parse(await AsyncStorage.getItem(STORAGE_KEYS.CONVERSATIONS)) || [];
-      const conversationIndex = conversations.findIndex(c => c.id === conversationId);
+      // Получаем беседы
+      const conversationsJson = await AsyncStorage.getItem(STORAGE_KEYS.CONVERSATIONS);
+      const conversations = JSON.parse(conversationsJson) || [];
       
-      if (conversationIndex === -1) {
-        throw new Error('Conversation not found');
+      // Находим беседу
+      const conversation = conversations.find(c => c.id === conversationId);
+      if (!conversation) {
+        return false;
       }
       
-      const conversation = conversations[conversationIndex];
-      const otherUserId = conversation.client_id === userId ? 
-        conversation.lawyer_id : conversation.client_id;
-      
-      // Mark messages as read
-      const messages = JSON.parse(await AsyncStorage.getItem(STORAGE_KEYS.MESSAGES)) || [];
-      let messagesUpdated = false;
-      
-      messages.forEach(message => {
-        if (message.sender_id === otherUserId && message.receiver_id === userId && !message.read) {
-          message.read = true;
-          messagesUpdated = true;
+      // Обновляем непрочитанные сообщения
+      let unreadCount = 0;
+      const updatedMessages = messages.map(msg => {
+        // Если сообщение из этой беседы, адресовано текущему пользователю и не прочитано
+        if (
+          (msg.conversation_id === conversationId || 
+          (msg.sender_id === conversation.client_id && msg.receiver_id === conversation.lawyer_id) || 
+          (msg.sender_id === conversation.lawyer_id && msg.receiver_id === conversation.client_id)) && 
+          msg.receiver_id === userId && 
+          !msg.read
+        ) {
+          return { ...msg, read: true, delivered: true };
         }
+        
+        // Считаем оставшиеся непрочитанные сообщения
+        if (
+          (msg.conversation_id === conversationId || 
+          (msg.sender_id === conversation.client_id && msg.receiver_id === conversation.lawyer_id) || 
+          (msg.sender_id === conversation.lawyer_id && msg.receiver_id === conversation.client_id)) && 
+          msg.receiver_id === userId && 
+          !msg.read
+        ) {
+          unreadCount++;
+        }
+        
+        return msg;
       });
       
-      if (messagesUpdated) {
-        await AsyncStorage.setItem(STORAGE_KEYS.MESSAGES, JSON.stringify(messages));
-      }
+      // Обновляем счетчик непрочитанных в беседе
+      const updatedConversations = conversations.map(c => {
+        if (c.id === conversationId) {
+          return { ...c, unread_count: 0 };
+        }
+        return c;
+      });
       
-      // Update conversation unread count
-      if (conversations[conversationIndex].unread_count > 0) {
-        conversations[conversationIndex].unread_count = 0;
-        await AsyncStorage.setItem(STORAGE_KEYS.CONVERSATIONS, JSON.stringify(conversations));
-      }
+      // Сохраняем обновленные данные
+      await AsyncStorage.setItem(STORAGE_KEYS.MESSAGES, JSON.stringify(updatedMessages));
+      await AsyncStorage.setItem(STORAGE_KEYS.CONVERSATIONS, JSON.stringify(updatedConversations));
       
-      return messagesUpdated ? 1 : 0;
+      return true;
     } catch (error) {
       console.error('Error marking messages as read:', error);
-      throw error;
+      return false;
     }
   },
   
@@ -791,6 +868,68 @@ const ChatService = {
     } catch (error) {
       console.error('Error getting potential chat partners:', error);
       throw error;
+    }
+  },
+
+  // Установка статуса "печатает"
+  setUserTyping: async (conversationId, userId, isTyping) => {
+    try {
+      // В реальном приложении здесь был бы API-запрос
+      console.log(`User ${userId} is ${isTyping ? 'typing' : 'not typing'} in conversation ${conversationId}`);
+      
+      // Получаем текущие беседы
+      const conversationsJson = await AsyncStorage.getItem(STORAGE_KEYS.CONVERSATIONS);
+      const conversations = JSON.parse(conversationsJson) || [];
+      
+      // Находим беседу
+      const conversationIndex = conversations.findIndex(c => c.id === conversationId);
+      if (conversationIndex === -1) {
+        return false;
+      }
+      
+      // Обновляем статус печатания
+      const conversation = conversations[conversationIndex];
+      if (userId === conversation.client_id) {
+        conversation.client_typing = isTyping;
+      } else if (userId === conversation.lawyer_id) {
+        conversation.lawyer_typing = isTyping;
+      }
+      
+      // Сохраняем обновленные данные
+      conversations[conversationIndex] = conversation;
+      await AsyncStorage.setItem(STORAGE_KEYS.CONVERSATIONS, JSON.stringify(conversations));
+      
+      return true;
+    } catch (error) {
+      console.error('Error setting typing status:', error);
+      return false;
+    }
+  },
+
+  // Получение статуса "печатает" для собеседника
+  getTypingStatus: async (conversationId, userId) => {
+    try {
+      // Получаем текущие беседы
+      const conversationsJson = await AsyncStorage.getItem(STORAGE_KEYS.CONVERSATIONS);
+      const conversations = JSON.parse(conversationsJson) || [];
+      
+      // Находим беседу
+      const conversation = conversations.find(c => c.id === conversationId);
+      if (!conversation) {
+        return false;
+      }
+      
+      // Определяем, кто собеседник
+      if (userId === conversation.client_id) {
+        return conversation.lawyer_typing || false;
+      } else if (userId === conversation.lawyer_id) {
+        return conversation.client_typing || false;
+      }
+      
+      return false;
+    } catch (error) {
+      console.error('Error getting typing status:', error);
+      return false;
     }
   }
 };

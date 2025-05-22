@@ -1,8 +1,9 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, Image, TouchableOpacity, Dimensions } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../constants';
 
-const ChatMessage = ({ message, isOwn }) => {
+const ChatMessage = ({ message, isOwn, onPressAttachment }) => {
   // Форматирование времени сообщения
   const formatMessageTime = (timestamp) => {
     if (!timestamp) return '';
@@ -30,6 +31,111 @@ const ChatMessage = ({ message, isOwn }) => {
 
   // Определяем, является ли сообщение от гостя
   const isFromGuest = message.is_from_guest || message.sender_id?.toString().startsWith('guest_');
+  
+  // Определяем, есть ли вложения в сообщении
+  const hasAttachment = message.attachment || message.image;
+  
+  // Рендер индикатора статуса сообщения (отправлено, доставлено, прочитано)
+  const renderMessageStatus = () => {
+    if (isFromGuest) return null;
+    
+    if (message.read) {
+      return (
+        <View style={styles.statusContainer}>
+          <Ionicons name="checkmark-done" size={14} color={isOwn ? 'rgba(255, 255, 255, 0.8)' : 'rgba(0, 0, 0, 0.4)'} />
+        </View>
+      );
+    } else if (message.delivered) {
+      return (
+        <View style={styles.statusContainer}>
+          <Ionicons name="checkmark" size={14} color={isOwn ? 'rgba(255, 255, 255, 0.8)' : 'rgba(0, 0, 0, 0.4)'} />
+        </View>
+      );
+    } else {
+      return (
+        <View style={styles.statusContainer}>
+          <Ionicons name="time-outline" size={14} color={isOwn ? 'rgba(255, 255, 255, 0.8)' : 'rgba(0, 0, 0, 0.4)'} />
+        </View>
+      );
+    }
+  };
+  
+  // Рендер вложения (если есть)
+  const renderAttachment = () => {
+    if (!hasAttachment) return null;
+    
+    if (message.image) {
+      return (
+        <TouchableOpacity 
+          style={styles.imageContainer}
+          onPress={() => onPressAttachment && onPressAttachment(message)}
+        >
+          <Image 
+            source={{ uri: message.image }} 
+            style={styles.attachmentImage} 
+            resizeMode="cover"
+          />
+        </TouchableOpacity>
+      );
+    }
+    
+    if (message.attachment) {
+      const fileIcon = getFileIcon(message.attachment);
+      const fileName = message.attachment.split('/').pop() || 'Файл';
+      
+      return (
+        <TouchableOpacity 
+          style={[styles.fileContainer, isOwn ? styles.ownFileContainer : styles.otherFileContainer]}
+          onPress={() => onPressAttachment && onPressAttachment(message)}
+        >
+          <Ionicons name={fileIcon} size={24} color={isOwn ? COLORS.white : COLORS.primary} />
+          <Text 
+            style={[styles.fileName, isOwn ? styles.ownFileName : styles.otherFileName]}
+            numberOfLines={1}
+            ellipsizeMode="middle"
+          >
+            {fileName}
+          </Text>
+          <Ionicons 
+            name="download-outline" 
+            size={20} 
+            color={isOwn ? COLORS.white : COLORS.primary} 
+          />
+        </TouchableOpacity>
+      );
+    }
+    
+    return null;
+  };
+  
+  // Определение иконки файла по расширению
+  const getFileIcon = (filePath) => {
+    if (!filePath) return 'document-outline';
+    
+    const extension = filePath.split('.').pop()?.toLowerCase();
+    
+    switch (extension) {
+      case 'pdf':
+        return 'document-text-outline';
+      case 'doc':
+      case 'docx':
+        return 'document-text-outline';
+      case 'xls':
+      case 'xlsx':
+        return 'calculator-outline';
+      case 'jpg':
+      case 'jpeg':
+      case 'png':
+      case 'gif':
+        return 'image-outline';
+      case 'mp4':
+      case 'mov':
+      case 'avi':
+        return 'videocam-outline';
+      default:
+        return 'document-outline';
+    }
+  };
 
   return (
     <View style={[
@@ -39,26 +145,30 @@ const ChatMessage = ({ message, isOwn }) => {
       <View style={[
         styles.bubble,
         isOwn ? styles.ownBubble : styles.otherBubble,
-        isFromGuest ? styles.guestBubble : null
+        isFromGuest ? styles.guestBubble : null,
+        hasAttachment && !message.message ? styles.attachmentOnlyBubble : null
       ]}>
-        <Text style={[
-          styles.messageText,
-          isOwn ? styles.ownMessageText : styles.otherMessageText
-        ]}>
-          {message.message}
-        </Text>
-        <View style={styles.timeContainer}>
+        {renderAttachment()}
+        
+        {message.message && (
+          <Text style={[
+            styles.messageText,
+            isOwn ? styles.ownMessageText : styles.otherMessageText
+          ]}>
+            {message.message}
+          </Text>
+        )}
+        
+        <View style={styles.messageFooter}>
           <Text style={[
             styles.timeText,
             isOwn ? styles.ownTimeText : styles.otherTimeText
           ]}>
             {formatMessageTime(message.created_at)}
           </Text>
-          {isOwn && !isFromGuest && (
-            <Text style={styles.statusText}>
-              {message.read ? 'Прочитано' : 'Отправлено'}
-            </Text>
-          )}
+          
+          {renderMessageStatus()}
+          
           {isFromGuest && (
             <Text style={[styles.guestLabel, isOwn ? styles.ownGuestLabel : styles.otherGuestLabel]}>
               Гость
@@ -69,6 +179,9 @@ const ChatMessage = ({ message, isOwn }) => {
     </View>
   );
 };
+
+const { width } = Dimensions.get('window');
+const maxImageWidth = width * 0.6;
 
 const styles = StyleSheet.create({
   container: {
@@ -87,6 +200,11 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 12,
     marginBottom: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 1,
+    elevation: 1,
   },
   ownBubble: {
     backgroundColor: COLORS.primary,
@@ -100,8 +218,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(0,0,0,0.1)', 
   },
+  attachmentOnlyBubble: {
+    padding: 6,
+  },
   messageText: {
     fontSize: 16,
+    lineHeight: 22,
     marginBottom: 4,
   },
   ownMessageText: {
@@ -110,7 +232,7 @@ const styles = StyleSheet.create({
   otherMessageText: {
     color: COLORS.text,
   },
-  timeContainer: {
+  messageFooter: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
     alignItems: 'center',
@@ -125,9 +247,8 @@ const styles = StyleSheet.create({
   otherTimeText: {
     color: 'rgba(0, 0, 0, 0.5)',
   },
-  statusText: {
-    fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.7)',
+  statusContainer: {
+    marginHorizontal: 2,
   },
   guestLabel: {
     fontSize: 11,
@@ -139,6 +260,40 @@ const styles = StyleSheet.create({
   },
   otherGuestLabel: {
     color: 'rgba(0, 0, 0, 0.5)',
+  },
+  imageContainer: {
+    marginBottom: 8,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  attachmentImage: {
+    width: maxImageWidth,
+    height: maxImageWidth * 0.75,
+    borderRadius: 8,
+  },
+  fileContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 8,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  ownFileContainer: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  otherFileContainer: {
+    backgroundColor: 'rgba(0, 0, 0, 0.05)',
+  },
+  fileName: {
+    flex: 1,
+    fontSize: 14,
+    marginHorizontal: 8,
+  },
+  ownFileName: {
+    color: COLORS.white,
+  },
+  otherFileName: {
+    color: COLORS.text,
   }
 });
 

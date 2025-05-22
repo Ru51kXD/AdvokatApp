@@ -17,7 +17,7 @@ const clientColors = [
   '#f39c12', // Оранжевый
 ];
 
-export const ImageService = {
+const ImageService = {
   // Получить цвет аватара адвоката по ID
   getLawyerAvatarColor: (id) => {
     const index = (id % lawyerColors.length);
@@ -40,6 +40,11 @@ export const ImageService = {
     }
     return parts[0].substring(0, 2).toUpperCase();
   },
+  
+  // Метод инициализации (алиас для preloadImages)
+  init: async () => {
+    return ImageService.preloadImages();
+  },
 
   // Функция предзагрузки (не требуется, так как мы используем динамические аватары)
   preloadImages: async () => {
@@ -49,4 +54,5 @@ export const ImageService = {
   },
 };
 
+export { ImageService };
 export default ImageService; 

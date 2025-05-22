@@ -5,6 +5,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 // Импортируем наше основное приложение и контекст авторизации
 import AppNavigation from '../../src/navigation';
 import { AuthProvider } from '../../src/contexts/AuthContext';
+import { PermissionsProvider } from '../../src/contexts/PermissionsContext';
 
 // Импортируем инициализацию базы данных и тестовые данные
 import { initDatabase, showTableStructure, showTableContents } from '../../src/database/database';
@@ -22,39 +23,26 @@ export default function Page() {
   useEffect(() => {
     const initializeApp = async () => {
       try {
-        console.log("=== Initializing application ===");
+        console.log('Initializing app...');
         
-        // Initialize database
-        console.log("1. Initializing database...");
+        // Инициализируем базу данных
         await initDatabase();
-        console.log("Database initialized successfully");
+        console.log('Database initialized');
         
-        // Предзагрузка изображений
-        console.log("2. Preloading images...");
-        try {
-          await ImageService.preloadImages();
-          console.log("Images preloaded successfully");
-        } catch (imageError) {
-          console.error('Error preloading images (non-critical):', imageError);
-        }
+        // Проверяем структуру таблиц (для отладки)
+        await showTableStructure('users');
+        await showTableStructure('lawyers');
         
-        // Заполнение БД тестовыми данными
-        console.log("3. Seeding database with test data...");
-        try {
-          await SeedDataService.seedData();
-        } catch (seedError) {
-          console.error('Error while seeding database:', seedError);
-          // Продолжаем выполнение, даже если не удалось заполнить БД тестовыми данными
-        }
+        // Инициализируем тестовые данные, если нужно
+        await SeedDataService.seedInitialData();
+        console.log('Initial data seeded');
         
-        // Попытка вывести информацию о таблицах для отладки
-        try {
-          console.log("4. Debug: Showing database table info");
-          await showTableStructure('users');
-          await showTableContents('users');
-        } catch (debugError) {
-          console.log("Debug info error (not critical):", debugError);
-        }
+        // Проверяем содержимое таблиц (для отладки)
+        await showTableContents('users');
+        await showTableContents('lawyers');
+        
+        // Инициализируем сервис изображений
+        await ImageService.init();
         
         setIsLoading(false);
       } catch (err) {
@@ -94,8 +82,10 @@ export default function Page() {
   return (
     <SafeAreaProvider>
       <AuthProvider>
-        <AppNavigation />
-        <StatusBar style="auto" />
+        <PermissionsProvider>
+          <AppNavigation />
+          <StatusBar style="auto" />
+        </PermissionsProvider>
       </AuthProvider>
     </SafeAreaProvider>
   );

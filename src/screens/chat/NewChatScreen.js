@@ -82,13 +82,10 @@ const NewChatScreen = ({ navigation }) => {
       const message = "Здравствуйте! Хотел бы обсудить с вами юридический вопрос.";
       const result = await ChatService.sendMessage(user.id, selectedUser.id, message);
       
-      // Используем полное имя адвоката, если доступно
-      const displayName = selectedUser.name || selectedUser.username;
-      
       // Переходим к экрану чата
-      navigation.replace('ChatScreen', {
-        conversationId: result.conversationId,
-        title: displayName
+      navigation.navigate('ChatScreen', {
+        conversationId: result.conversation.id,
+        title: selectedUser.username || selectedUser.name || 'Пользователь'
       });
     } catch (error) {
       console.error('Error starting conversation:', error);

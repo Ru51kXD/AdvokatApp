@@ -8,6 +8,11 @@ import {
 import { KAZAKHSTAN_CITIES, LAW_AREAS, PRICE_RANGES } from '../constants';
 
 const SeedDataService = {
+  // Метод для инициализации начальных данных (алиас для seedData)
+  seedInitialData: async () => {
+    return SeedDataService.seedData();
+  },
+  
   seedData: async () => {
     try {
       console.log('Checking for existing data...');

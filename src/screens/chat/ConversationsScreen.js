@@ -9,11 +9,15 @@ import {
   RefreshControl,
   Platform,
   TextInput,
+  Image,
+  Alert,
+  Animated,
+  ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
-import { format } from 'date-fns';
+import { format, formatDistanceToNow } from 'date-fns';
 import ru from 'date-fns/locale/ru';
 
 import { COLORS } from '../../constants';
@@ -65,6 +69,29 @@ const ConversationsScreen = ({ navigation }) => {
   const [error, setError] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState('all'); // 'all', 'unread', 'client', 'guest'
+  const [showSearch, setShowSearch] = useState(false);
+  
+  const searchInputAnim = new Animated.Value(0);
+
+  // Функция для переключения поиска
+  const toggleSearch = () => {
+    if (showSearch) {
+      Animated.timing(searchInputAnim, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: false
+      }).start();
+      setSearchQuery('');
+      setTimeout(() => setShowSearch(false), 300);
+    } else {
+      setShowSearch(true);
+      Animated.timing(searchInputAnim, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: false
+      }).start();
+    }
+  };
 
   // Инициализация с помощью тестовых данных для мгновенного отображения
   useEffect(() => {
@@ -72,7 +99,12 @@ const ConversationsScreen = ({ navigation }) => {
       const mockData = MOCK_CONVERSATIONS.map(conv => ({
         ...conv,
         client_id: user.userType === 'client' ? user.id : 1000 + Math.floor(Math.random() * 100),
-        lawyer_id: user.userType === 'lawyer' ? user.id : 2000 + Math.floor(Math.random() * 100)
+        lawyer_id: user.userType === 'lawyer' ? user.id : 2000 + Math.floor(Math.random() * 100),
+        // Добавим вероятность наличия картинки или документа
+        has_image: Math.random() > 0.7,
+        has_document: Math.random() > 0.8,
+        // Добавим случайный статус печати
+        typing: Math.random() > 0.8
       }));
       setConversations(mockData);
       setFilteredConversations(mockData);
@@ -100,8 +132,17 @@ const ConversationsScreen = ({ navigation }) => {
       console.log(`Загружено ${data.length} чатов`);
       
       if (data && data.length > 0) {
-        setConversations(data);
-        applyFilters(data, searchQuery, activeFilter);
+        // Добавим дополнительные данные для UI
+        const enhancedData = data.map(conv => ({
+          ...conv,
+          // Добавим вероятность наличия картинки или документа
+          has_image: Math.random() > 0.7,
+          has_document: Math.random() > 0.8,
+          // Добавим случайный статус печати
+          typing: Math.random() > 0.8
+        }));
+        setConversations(enhancedData);
+        applyFilters(enhancedData, searchQuery, activeFilter);
       }
     } catch (err) {
       console.error('Error loading conversations:', err);
@@ -186,18 +227,50 @@ const ConversationsScreen = ({ navigation }) => {
     navigation.navigate('NewChatScreen');
   };
 
+  // Удаление чата
+  const handleDeleteChat = (conversation) => {
+    Alert.alert(
+      'Удаление чата',
+      'Вы уверены, что хотите удалить этот чат? Это действие нельзя отменить.',
+      [
+        { text: 'Отмена', style: 'cancel' },
+        { 
+          text: 'Удалить', 
+          style: 'destructive',
+          onPress: () => {
+            // В реальном приложении здесь должен быть запрос к серверу
+            // Для демонстрации просто удаляем из локального состояния
+            const updatedConversations = conversations.filter(c => c.id !== conversation.id);
+            setConversations(updatedConversations);
+            applyFilters(updatedConversations, searchQuery, activeFilter);
+            
+            Alert.alert('Успешно', 'Чат был удален');
+          }
+        }
+      ]
+    );
+  };
+
   // Форматирование даты последнего сообщения
   const formatLastMessageTime = (timestamp) => {
     if (!timestamp) return '';
     
-    const date = new Date(timestamp);
-    const now = new Date();
-    const isToday = date.setHours(0, 0, 0, 0) === now.setHours(0, 0, 0, 0);
-    
-    if (isToday) {
-      return format(date, 'HH:mm');
-    } else {
-      return format(date, 'd MMM', { locale: ru });
+    try {
+      const date = new Date(timestamp);
+      const now = new Date();
+      const isToday = date.getDate() === now.getDate() && 
+                     date.getMonth() === now.getMonth() && 
+                     date.getFullYear() === now.getFullYear();
+      
+      if (isToday) {
+        return format(date, 'HH:mm');
+      } else {
+        // Используем относительное форматирование
+        return formatDistanceToNow(date, { addSuffix: true, locale: ru });
+      }
+    } catch (error) {
+      console.error('Error formatting date:', error);
+      return '';
     }
   };
 
@@ -224,6 +297,7 @@ const ConversationsScreen = ({ navigation }) => {
   const renderConversationItem = ({ item }) => {
     const name = user.userType === 'client' ? item.lawyer_name : item.client_name;
     const isGuestConversation = item.has_guest;
+    const hasAttachment = item.has_image || item.has_document;
     
     // Randomly set some conversations as "online" to make the app look more alive
     item.online = item.online === undefined ? Math.random() > 0.7 : item.online;
@@ -235,13 +309,17 @@ const ConversationsScreen = ({ navigation }) => {
           item.unread_count > 0 && styles.unreadConversation
         ]}
         onPress={() => handleConversationPress(item)}
+        onLongPress={() => handleDeleteChat(item)}
       >
         {renderAvatar(item)}
         
         <View style={styles.conversationInfo}>
           <View style={styles.conversationHeader}>
             <View style={styles.nameContainer}>
-              <Text style={styles.name} numberOfLines={1}>
+              <Text style={[
+                styles.name, 
+                item.unread_count > 0 && styles.unreadName
+              ]} numberOfLines={1}>
                 {name}
               </Text>
               {isGuestConversation && (
@@ -249,40 +327,39 @@ const ConversationsScreen = ({ navigation }) => {
                   <Text style={styles.guestText}>Гость</Text>
                 </View>
               )}
-              {item.online && (
-                <Text style={styles.onlineText}>В сети</Text>
+            </View>
+            <Text style={styles.time}>{formatLastMessageTime(item.updated_at)}</Text>
+          </View>
+          
+          <View style={styles.messageContainer}>
+            <View style={styles.messageContent}>
+              {item.typing ? (
+                <Text style={styles.typingText}>печатает...</Text>
+              ) : (
+                <Text style={[
+                  styles.message, 
+                  item.unread_count > 0 && styles.unreadMessage
+                ]} numberOfLines={1}>
+                  {item.last_message}
+                </Text>
+              )}
+              {hasAttachment && (
+                <View style={styles.attachmentIndicator}>
+                  <Ionicons 
+                    name={item.has_image ? "image-outline" : "document-outline"} 
+                    size={14} 
+                    color={COLORS.textSecondary} 
+                  />
+                </View>
               )}
             </View>
-            <Text style={styles.time}>
-              {formatLastMessageTime(item.updated_at)}
-            </Text>
-          </View>
-          
-          <View style={styles.messageRow}>
-            {item.request_title && (
-              <Text style={styles.requestTitle} numberOfLines={1}>
-                По заявке: {item.request_title}
-              </Text>
+            
+            {item.unread_count > 0 && (
+              <View style={styles.unreadBadge}>
+                <Text style={styles.unreadCount}>{item.unread_count}</Text>
+              </View>
             )}
           </View>
-          
-          <Text 
-            style={[
-              styles.message, 
-              item.unread_count > 0 && styles.unreadMessage
-            ]} 
-            numberOfLines={1}
-          >
-            {item.last_message || 'Нет сообщений'}
-          </Text>
-          
-          {item.unread_count > 0 && (
-            <View style={styles.unreadBadge}>
-              <Text style={styles.unreadText}>
-                {item.unread_count}
-              </Text>
-            </View>
-          )}
         </View>
       </TouchableOpacity>
     );
@@ -290,140 +367,170 @@ const ConversationsScreen = ({ navigation }) => {
 
   // Отображение пустого списка
   const renderEmptyList = () => {
-    // Показываем индикатор загрузки только при инициальной загрузке,
-    // но не во время обновления списка
-    if (loading && initialLoading) {
+    if (loading && conversations.length === 0) {
       return (
         <View style={styles.emptyContainer}>
           <ActivityIndicator size="large" color={COLORS.primary} />
-          <Text style={styles.emptyTitle}>Загрузка бесед...</Text>
+          <Text style={styles.emptyText}>Загрузка чатов...</Text>
         </View>
       );
     }
     
-    if (error && filteredConversations.length === 0) {
+    if (error) {
       return (
         <View style={styles.emptyContainer}>
           <Ionicons name="alert-circle-outline" size={64} color={COLORS.error} />
-          <Text style={styles.emptyTitle}>Произошла ошибка</Text>
-          <Text style={styles.emptyText}>{error}</Text>
-          <TouchableOpacity 
-            style={styles.retryButton}
-            onPress={loadConversations}
-          >
+          <Text style={[styles.emptyText, styles.errorText]}>{error}</Text>
+          <TouchableOpacity style={styles.retryButton} onPress={loadConversations}>
             <Text style={styles.retryButtonText}>Повторить</Text>
           </TouchableOpacity>
         </View>
       );
     }
     
-    // Проверяем, связано ли отсутствие бесед с фильтрацией
+    // Если это фильтрованный пустой список
     if (conversations.length > 0 && filteredConversations.length === 0) {
+      let message;
+      if (searchQuery) {
+        message = `Нет чатов, соответствующих запросу "${searchQuery}"`;
+      } else if (activeFilter === 'unread') {
+        message = 'Нет непрочитанных сообщений';
+      } else if (activeFilter === 'client') {
+        message = 'Нет чатов с клиентами';
+      } else if (activeFilter === 'guest') {
+        message = 'Нет чатов с гостями';
+      } else {
+        message = 'Нет доступных чатов';
+      }
+      
       return (
         <View style={styles.emptyContainer}>
-          <Ionicons name="search-outline" size={64} color={COLORS.lightGrey} />
-          <Text style={styles.emptyTitle}>Ничего не найдено</Text>
-          <Text style={styles.emptyText}>
-            По вашему запросу не найдено бесед
-          </Text>
-          <TouchableOpacity 
-            style={styles.resetButton}
-            onPress={() => {
-              setSearchQuery('');
-              setActiveFilter('all');
-            }}
-          >
-            <Text style={styles.resetButtonText}>Сбросить фильтры</Text>
-          </TouchableOpacity>
+          <Ionicons name="chatbubble-outline" size={64} color={COLORS.textSecondary} />
+          <Text style={styles.emptyText}>{message}</Text>
+          {(searchQuery || activeFilter !== 'all') && (
+            <TouchableOpacity 
+              style={styles.resetFilterButton}
+              onPress={() => {
+                setSearchQuery('');
+                setActiveFilter('all');
+              }}
+            >
+              <Text style={styles.resetFilterText}>Сбросить фильтры</Text>
+            </TouchableOpacity>
+          )}
         </View>
       );
     }
     
+    // Пустой список чатов
     return (
       <View style={styles.emptyContainer}>
-        <Ionicons name="chatbubble-ellipses-outline" size={64} color={COLORS.lightGrey} />
-        <Text style={styles.emptyTitle}>У вас пока нет бесед</Text>
-        <Text style={styles.emptyText}>
-          Начните общение с клиентами или коллегами
-        </Text>
-        <TouchableOpacity 
-          style={styles.newChatButton}
-          onPress={handleNewChat}
-        >
-          <Text style={styles.newChatButtonText}>Начать беседу</Text>
+        <Ionicons name="chatbubble-outline" size={64} color={COLORS.textSecondary} />
+        <Text style={styles.emptyText}>У вас пока нет чатов</Text>
+        <TouchableOpacity style={styles.startChatButton} onPress={handleNewChat}>
+          <Text style={styles.startChatText}>Начать новый чат</Text>
         </TouchableOpacity>
       </View>
     );
   };
 
-  // Render header with search and filters
+  // Отображение заголовка списка с фильтрами
   const renderListHeader = () => {
     return (
-      <View>
-        <View style={styles.searchContainer}>
-          <Ionicons name="search" size={20} color={COLORS.gray} style={styles.searchIcon} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Поиск по сообщениям"
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            placeholderTextColor={COLORS.gray}
-          />
-          {searchQuery ? (
-            <TouchableOpacity onPress={() => setSearchQuery('')}>
-              <Ionicons name="close-circle" size={20} color={COLORS.gray} />
+      <View style={styles.listHeader}>
+        {showSearch ? (
+          <Animated.View style={[
+            styles.searchInputContainer,
+            {
+              width: searchInputAnim.interpolate({
+                inputRange: [0, 1],
+                outputRange: ['0%', '100%']
+              }),
+              opacity: searchInputAnim
+            }
+          ]}>
+            <Ionicons name="search" size={20} color={COLORS.textSecondary} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Поиск чатов..."
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              autoFocus
+            />
+            <TouchableOpacity onPress={toggleSearch}>
+              <Ionicons name="close" size={20} color={COLORS.textSecondary} />
             </TouchableOpacity>
-          ) : null}
-        </View>
-        
-        <View style={styles.filtersContainer}>
-          <TouchableOpacity 
-            style={[styles.filterButton, activeFilter === 'all' && styles.activeFilterButton]}
-            onPress={() => setActiveFilter('all')}
-          >
-            <Text style={[styles.filterText, activeFilter === 'all' && styles.activeFilterText]}>
-              Все
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={[styles.filterButton, activeFilter === 'unread' && styles.activeFilterButton]}
-            onPress={() => setActiveFilter('unread')}
-          >
-            <Text style={[styles.filterText, activeFilter === 'unread' && styles.activeFilterText]}>
-              Непрочитанные
-            </Text>
-          </TouchableOpacity>
-          {user?.userType === 'lawyer' && (
-            <>
+          </Animated.View>
+        ) : (
+          <View style={styles.filterContainer}>
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.filterScrollContent}
+            >
               <TouchableOpacity 
-                style={[styles.filterButton, activeFilter === 'client' && styles.activeFilterButton]}
-                onPress={() => setActiveFilter('client')}
+                style={[styles.filterButton, activeFilter === 'all' && styles.activeFilterButton]}
+                onPress={() => setActiveFilter('all')}
               >
-                <Text style={[styles.filterText, activeFilter === 'client' && styles.activeFilterText]}>
-                  Клиенты
+                <Text style={[
+                  styles.filterText, 
+                  activeFilter === 'all' && styles.activeFilterText
+                ]}>
+                  Все
                 </Text>
               </TouchableOpacity>
+              
               <TouchableOpacity 
-                style={[styles.filterButton, activeFilter === 'guest' && styles.activeFilterButton]}
-                onPress={() => setActiveFilter('guest')}
+                style={[styles.filterButton, activeFilter === 'unread' && styles.activeFilterButton]}
+                onPress={() => setActiveFilter('unread')}
               >
-                <Text style={[styles.filterText, activeFilter === 'guest' && styles.activeFilterText]}>
-                  Гости
+                <Text style={[
+                  styles.filterText, 
+                  activeFilter === 'unread' && styles.activeFilterText
+                ]}>
+                  Непрочитанные
                 </Text>
               </TouchableOpacity>
-            </>
-          )}
-        </View>
+              
+              {user?.userType === 'lawyer' && (
+                <>
+                  <TouchableOpacity 
+                    style={[styles.filterButton, activeFilter === 'client' && styles.activeFilterButton]}
+                    onPress={() => setActiveFilter('client')}
+                  >
+                    <Text style={[
+                      styles.filterText, 
+                      activeFilter === 'client' && styles.activeFilterText
+                    ]}>
+                      Клиенты
+                    </Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity 
+                    style={[styles.filterButton, activeFilter === 'guest' && styles.activeFilterButton]}
+                    onPress={() => setActiveFilter('guest')}
+                  >
+                    <Text style={[
+                      styles.filterText, 
+                      activeFilter === 'guest' && styles.activeFilterText
+                    ]}>
+                      Гости
+                    </Text>
+                  </TouchableOpacity>
+                </>
+              )}
+            </ScrollView>
+            
+            <TouchableOpacity style={styles.searchButton} onPress={toggleSearch}>
+              <Ionicons name="search" size={22} color={COLORS.primary} />
+            </TouchableOpacity>
+          </View>
+        )}
         
-        <View style={styles.statsContainer}>
-          <Text style={styles.statsText}>
-            {filteredConversations.length} {getConversationCountText(filteredConversations.length)}
+        <View style={styles.conversationCount}>
+          <Text style={styles.conversationCountText}>
+            {getConversationCountText(filteredConversations.length)}
           </Text>
-          {searchQuery && (
-            <Text style={styles.searchResultText}>
-              по запросу "{searchQuery}"
-            </Text>
-          )}
         </View>
       </View>
     );
@@ -435,35 +542,42 @@ const ConversationsScreen = ({ navigation }) => {
         data={filteredConversations}
         renderItem={renderConversationItem}
         keyExtractor={(item) => item.id.toString()}
-        ListHeaderComponent={renderListHeader}
         ListEmptyComponent={renderEmptyList}
+        ListHeaderComponent={renderListHeader}
         contentContainerStyle={styles.listContent}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
             colors={[COLORS.primary]}
+            tintColor={COLORS.primary}
           />
         }
       />
-      
-      <TouchableOpacity
-        style={styles.floatingButton}
-        onPress={handleNewChat}
-      >
-        <Ionicons name="chatbubbles" size={22} color={COLORS.white} />
-        <Text style={styles.floatingButtonText}>Написать</Text>
+
+      <TouchableOpacity style={styles.newChatButton} onPress={handleNewChat}>
+        <Ionicons name="chatbubble-ellipses" size={24} color={COLORS.white} />
       </TouchableOpacity>
     </SafeAreaView>
   );
 };
 
-// Helper function to get the correct word form for count in Russian
+// Получение текста о количестве бесед
 const getConversationCountText = (count) => {
-  if (count === 0) return 'бесед';
-  if (count === 1) return 'беседа';
-  if (count >= 2 && count <= 4) return 'беседы';
-  return 'бесед';
+  if (count === 0) return 'Нет чатов';
+  
+  const lastDigit = count % 10;
+  const lastTwoDigits = count % 100;
+  
+  if (lastTwoDigits >= 11 && lastTwoDigits <= 19) {
+    return `${count} чатов`;
+  } else if (lastDigit === 1) {
+    return `${count} чат`;
+  } else if (lastDigit >= 2 && lastDigit <= 4) {
+    return `${count} чата`;
+  } else {
+    return `${count} чатов`;
+  }
 };
 
 const styles = StyleSheet.create({
@@ -471,102 +585,185 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.background,
   },
-  loadingContainer: {
+  listContent: {
+    flexGrow: 1,
+    paddingBottom: 80, // Учитываем плавающую кнопку
+  },
+  conversationItem: {
+    flexDirection: 'row',
+    padding: 16,
+    backgroundColor: COLORS.white,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.lightGrey,
+  },
+  unreadConversation: {
+    backgroundColor: COLORS.primary + '05',
+  },
+  avatar: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  avatarText: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: COLORS.white,
+  },
+  onlineIndicator: {
+    position: 'absolute',
+    bottom: 2,
+    right: 2,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: COLORS.success,
+    borderWidth: 2,
+    borderColor: COLORS.white,
+  },
+  conversationInfo: {
     flex: 1,
+    justifyContent: 'center',
+  },
+  conversationHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  nameContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  name: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: COLORS.text,
+    marginRight: 8,
+  },
+  unreadName: {
+    fontWeight: 'bold',
+  },
+  guestBadge: {
+    backgroundColor: COLORS.lightGrey,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  guestText: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+  },
+  time: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+  },
+  messageContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  messageContent: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  message: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    marginRight: 8,
+  },
+  unreadMessage: {
+    color: COLORS.text,
+    fontWeight: '500',
+  },
+  typingText: {
+    fontSize: 14,
+    color: COLORS.primary,
+    fontStyle: 'italic',
+  },
+  attachmentIndicator: {
+    marginLeft: 4,
+  },
+  unreadBadge: {
+    backgroundColor: COLORS.primary,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  errorContainer: {
-    flex: 1,
-    justifyContent: 'center',
+  unreadCount: {
+    fontSize: 12,
+    color: COLORS.white,
+    fontWeight: 'bold',
+  },
+  emptyContainer: {
     alignItems: 'center',
-    padding: 16,
+    justifyContent: 'center',
+    padding: 32,
+  },
+  emptyText: {
+    fontSize: 16,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+    marginTop: 16,
+    marginBottom: 24,
   },
   errorText: {
-    fontSize: 16,
     color: COLORS.error,
-    textAlign: 'center',
-    marginBottom: 16,
   },
   retryButton: {
-    paddingVertical: 12,
-    paddingHorizontal: 24,
     backgroundColor: COLORS.primary,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
     borderRadius: 8,
-    marginTop: 12,
   },
   retryButtonText: {
     color: COLORS.white,
     fontWeight: '500',
-    fontSize: 16,
   },
-  resetButton: {
-    paddingVertical: 12,
-    paddingHorizontal: 24,
+  startChatButton: {
     backgroundColor: COLORS.primary,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
     borderRadius: 8,
-    marginTop: 12,
   },
-  resetButtonText: {
+  startChatText: {
     color: COLORS.white,
     fontWeight: '500',
-    fontSize: 16,
   },
-  listContent: {
-    padding: 16,
-    flexGrow: 1,
+  resetFilterButton: {
+    padding: 8,
   },
-  searchContainer: {
+  resetFilterText: {
+    color: COLORS.primary,
+    fontWeight: '500',
+  },
+  listHeader: {
+    backgroundColor: COLORS.white,
+    paddingTop: 8,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.lightGrey,
+  },
+  filterContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.white,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    marginBottom: 16,
-    ...Platform.select({
-      ios: {
-        shadowColor: COLORS.black,
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.1,
-        shadowRadius: 2,
-      },
-      android: {
-        elevation: 2,
-      },
-    }),
+    paddingHorizontal: 16,
   },
-  searchIcon: {
-    marginRight: 8,
-  },
-  searchInput: {
-    flex: 1,
-    height: 44,
-    color: COLORS.text,
-    fontSize: 15,
-  },
-  filtersContainer: {
-    flexDirection: 'row',
-    marginBottom: 16,
-    flexWrap: 'wrap',
+  filterScrollContent: {
+    paddingRight: 16,
   },
   filterButton: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    backgroundColor: COLORS.white,
-    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
     marginRight: 8,
-    marginBottom: 8,
-    ...Platform.select({
-      ios: {
-        shadowColor: COLORS.black,
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.1,
-        shadowRadius: 2,
-      },
-      android: {
-        elevation: 1,
-      },
-    }),
+    borderRadius: 16,
+    backgroundColor: COLORS.background,
   },
   activeFilterButton: {
     backgroundColor: COLORS.primary,
@@ -579,198 +776,51 @@ const styles = StyleSheet.create({
     color: COLORS.white,
     fontWeight: '500',
   },
-  statsContainer: {
-    flexDirection: 'row',
-    marginBottom: 12,
-  },
-  statsText: {
-    fontSize: 14,
-    color: COLORS.textSecondary,
-  },
-  searchResultText: {
-    fontSize: 14,
-    color: COLORS.textSecondary,
-    fontStyle: 'italic',
-    marginLeft: 4,
-  },
-  conversationItem: {
-    flexDirection: 'row',
-    padding: 12,
-    backgroundColor: COLORS.white,
-    borderRadius: 16,
-    marginBottom: 12,
-    ...Platform.select({
-      ios: {
-        shadowColor: COLORS.black,
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.1,
-        shadowRadius: 2,
-      },
-      android: {
-        elevation: 2,
-      },
-    }),
-  },
-  unreadConversation: {
-    backgroundColor: 'rgba(46, 91, 255, 0.05)',
-    borderLeftWidth: 3,
-    borderLeftColor: COLORS.primary,
-  },
-  avatar: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
+  searchButton: {
+    width: 40,
+    height: 40,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
-    position: 'relative',
+    borderRadius: 20,
   },
-  avatarText: {
-    color: COLORS.white,
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  onlineIndicator: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: '#34C759',
-    borderWidth: 2,
-    borderColor: COLORS.white,
-  },
-  conversationInfo: {
-    flex: 1,
-    position: 'relative',
-  },
-  conversationHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 4,
-  },
-  nameContainer: {
+  searchInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    flex: 1,
-    marginRight: 8,
+    backgroundColor: COLORS.background,
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    marginHorizontal: 16,
   },
-  name: {
+  searchInput: {
+    flex: 1,
     fontSize: 16,
-    fontWeight: '600',
-    color: COLORS.text,
-    marginRight: 8,
+    marginLeft: 8,
+    paddingVertical: 4,
   },
-  onlineText: {
-    fontSize: 12,
-    color: '#34C759',
-    marginLeft: 4,
+  conversationCount: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
   },
-  guestBadge: {
-    backgroundColor: COLORS.warning,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 10,
-  },
-  guestText: {
-    fontSize: 10,
-    color: COLORS.white,
-    fontWeight: '500',
-  },
-  time: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-  },
-  messageRow: {
-    marginBottom: 2,
-  },
-  requestTitle: {
-    fontSize: 12,
-    color: COLORS.primary,
-    fontWeight: '500',
-  },
-  message: {
+  conversationCountText: {
     fontSize: 14,
     color: COLORS.textSecondary,
-  },
-  unreadMessage: {
-    color: COLORS.text,
-    fontWeight: '500',
-  },
-  unreadBadge: {
-    position: 'absolute',
-    right: 0,
-    bottom: 0,
-    backgroundColor: COLORS.primary,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  unreadText: {
-    color: COLORS.white,
-    fontSize: 11,
-    fontWeight: 'bold',
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-    marginTop: 40,
-  },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: COLORS.text,
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  emptyText: {
-    fontSize: 16,
-    color: COLORS.textSecondary,
-    textAlign: 'center',
-    marginBottom: 24,
   },
   newChatButton: {
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    backgroundColor: COLORS.primary,
-    borderRadius: 8,
-  },
-  newChatButtonText: {
-    color: COLORS.white,
-    fontWeight: '600',
-    fontSize: 16,
-  },
-  floatingButton: {
     position: 'absolute',
-    right: 16,
-    bottom: 16,
+    bottom: 24,
+    right: 24,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     backgroundColor: COLORS.primary,
-    borderRadius: 24,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    flexDirection: 'row',
+    justifyContent: 'center',
     alignItems: 'center',
-    ...Platform.select({
-      ios: {
-        shadowColor: COLORS.black,
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.3,
-        shadowRadius: 4,
-      },
-      android: {
-        elevation: 4,
-      },
-    }),
-  },
-  floatingButtonText: {
-    color: COLORS.white,
-    fontWeight: '600',
-    marginLeft: 8,
+    elevation: 4,
+    shadowColor: COLORS.black,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
   },
 });
 

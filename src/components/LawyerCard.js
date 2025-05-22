@@ -45,8 +45,8 @@ const LawyerCard = ({ lawyer, onPress }) => {
       
       // Переходим к экрану чата
       navigation.navigate('ChatScreen', {
-        conversationId: result.conversationId,
-        title: lawyer.username || 'Адвокат',
+        conversationId: result.conversation.id,
+        title: lawyer.username || lawyer.name || 'Адвокат',
         guestId: !user ? senderId : null
       });
     } catch (err) {

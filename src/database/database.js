@@ -464,7 +464,18 @@ export const updateRequest = async (requestId, requestData) => {
 // Отладочные функции
 export const showTableStructure = async (tableName) => {
   try {
-    const data = JSON.parse(await AsyncStorage.getItem(STORAGE_KEYS[tableName.toUpperCase()])) || [];
+    if (!tableName) {
+      console.log('Table name must be specified. Available tables:', Object.keys(STORAGE_KEYS));
+      return;
+    }
+    
+    const storageKey = STORAGE_KEYS[tableName.toUpperCase()];
+    if (!storageKey) {
+      console.log('Invalid table name:', tableName, 'Available tables:', Object.keys(STORAGE_KEYS));
+      return;
+    }
+    
+    const data = JSON.parse(await AsyncStorage.getItem(storageKey)) || [];
     
     if (data.length === 0) {
       console.log(`Table ${tableName} is empty`);
@@ -509,5 +520,28 @@ export const getLawyerByUserId = async (userId) => {
   } catch (error) {
     console.error('Error getting lawyer by user ID:', error);
     throw error;
+  }
+};
+
+// Функция для определения типа пользователя
+export const getUserType = async (userId) => {
+  try {
+    // Проверяем, является ли пользователь гостем
+    if (String(userId).startsWith('guest_')) {
+      return 'guest';
+    }
+    
+    // Получаем пользователя из базы данных
+    const user = await getUserById(userId);
+    
+    if (!user) {
+      throw new Error('User not found');
+    }
+    
+    // Возвращаем тип пользователя
+    return user.user_type || 'client'; // По умолчанию считаем клиентом
+  } catch (error) {
+    console.error('Error getting user type:', error);
+    return 'client'; // По умолчанию в случае ошибки
   }
 }; 

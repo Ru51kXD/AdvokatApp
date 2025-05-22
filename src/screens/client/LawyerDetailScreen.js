@@ -32,6 +32,7 @@ const LawyerDetailScreen = ({ route, navigation }) => {
   const [error, setError] = useState(null);
   const [creatingChat, setCreatingChat] = useState(false);
   const [showAllReviews, setShowAllReviews] = useState(false);
+  const [modalVisible, setModalVisible] = useState(false);
 
   const fetchLawyerDetails = useCallback(async () => {
     // Если у нас уже есть данные адвоката из навигации, не нужно их запрашивать
@@ -91,32 +92,19 @@ const LawyerDetailScreen = ({ route, navigation }) => {
 
   const handleSendMessage = async () => {
     try {
-      setCreatingChat(true);
-      
-      if (!lawyer || !lawyer.user_id) {
-        Alert.alert(
-          'Ошибка',
-          'Не удалось определить адвоката для отправки сообщения',
-          [{ text: 'OK' }]
-        );
+      // Если пользователь не авторизован, показываем сообщение
+      if (!user) {
+        setModalVisible(true);
         return;
       }
       
-      // Определяем ID адвоката
-      const lawyerId = lawyer.user_id;
+      setCreatingChat(true);
+      const senderId = user.id;
+      const lawyerId = lawyer.id;
+      const firstMessage = 'Здравствуйте! Я хотел бы обсудить юридический вопрос.';
       
-      // Если пользователь не авторизован, создаем временный ID для гостя
-      const guestId = "guest_" + Math.floor(Math.random() * 1000000);
-      const senderId = user ? user.id : guestId;
+      console.log('Создаем чат между', senderId, 'и', lawyerId);
       
-      console.log('Creating chat with lawyer:', {
-        senderId,
-        lawyerId,
-        isAuthenticated: Boolean(user)
-      });
-      
-      // Отправляем первое сообщение и создаем чат
-      const firstMessage = "Здравствуйте! Меня интересует консультация по юридическому вопросу.";
       const result = await ChatService.sendMessage(
         senderId, 
         lawyerId,
@@ -125,7 +113,7 @@ const LawyerDetailScreen = ({ route, navigation }) => {
       
       // Переходим к экрану чата
       navigation.navigate('ChatScreen', {
-        conversationId: result.conversationId,
+        conversationId: result.conversation.id,
         title: lawyer.username || 'Адвокат',
         guestId: !user ? senderId : null
       });
