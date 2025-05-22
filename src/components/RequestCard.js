@@ -4,11 +4,60 @@ import { Ionicons } from '@expo/vector-icons';
 import Card from './Card';
 import { COLORS, REQUEST_STATUS } from '../constants';
 
+// Вспомогательная функция для безопасного извлечения текста из объектов
+const safeText = (value) => {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  if (typeof value === 'object') {
+    if (value.hasOwnProperty('label')) return value.label;
+    if (value.hasOwnProperty('name')) return value.name;
+    if (value.hasOwnProperty('value')) return value.value;
+    if (value.hasOwnProperty('id')) return String(value.id);
+    return '';
+  }
+  return String(value);
+};
+
+// Функция для безопасного создания копии объекта запроса без циклических ссылок
+const sanitizeRequest = (request) => {
+  if (!request) return {};
+  
+  // Создаем базовую копию объекта
+  const sanitized = { ...request };
+  
+  // Безопасно обрабатываем поля, которые могут быть объектами
+  if (typeof sanitized.law_area === 'object') {
+    sanitized.law_area = safeText(sanitized.law_area);
+  }
+  
+  if (typeof sanitized.price_range === 'object') {
+    sanitized.price_range = safeText(sanitized.price_range);
+  }
+  
+  if (typeof sanitized.client_name === 'object') {
+    sanitized.client_name = safeText(sanitized.client_name);
+  }
+  
+  if (typeof sanitized.title === 'object') {
+    sanitized.title = safeText(sanitized.title);
+  }
+  
+  if (typeof sanitized.description === 'object') {
+    sanitized.description = safeText(sanitized.description);
+  }
+  
+  return sanitized;
+};
+
 const RequestCard = ({ request, onPress, showResponses = false, showClientInfo = false }) => {
   // Проверяем, что request существует и содержит необходимые данные
   if (!request) {
     return null;
   }
+  
+  // Создаем безопасную копию запроса
+  const safeRequest = sanitizeRequest(request);
 
   const getStatusBadge = (status) => {
     let type = 'default';
@@ -80,20 +129,20 @@ const RequestCard = ({ request, onPress, showResponses = false, showClientInfo =
   };
   
   // Приоритетные (срочные) заявки
-  const isUrgent = request.isUrgent || false;
+  const isUrgent = safeRequest.isUrgent || false;
   
   // Отклик адвоката на заявку
-  const hasResponded = request.hasResponded || false;
+  const hasResponded = safeRequest.hasResponded || false;
   
   // Получаем значения или устанавливаем дефолтные
-  const title = request.title || 'Без названия';
-  const description = request.description || '';
-  const lawArea = request.law_area || 'Не указано';
-  const priceRange = request.price_range || 'Не указано';
-  const createdAt = request.created_at || new Date().toISOString();
-  const responseCount = request.response_count || 0;
-  const clientName = request.client_name || 'Клиент';
-  const experienceRequired = request.experience_required || 0;
+  const title = safeText(safeRequest.title) || 'Без названия';
+  const description = safeText(safeRequest.description) || '';
+  const lawArea = safeText(safeRequest.law_area) || 'Не указано';
+  const priceRange = safeText(safeRequest.price_range) || 'Не указано';
+  const createdAt = safeRequest.created_at || new Date().toISOString();
+  const responseCount = safeRequest.response_count || 0;
+  const clientName = safeText(safeRequest.client_name) || 'Клиент';
+  const experienceRequired = safeRequest.experience_required || 0;
   
   return (
     <Card onPress={onPress}>
@@ -161,7 +210,7 @@ const RequestCard = ({ request, onPress, showResponses = false, showClientInfo =
       
       <Card.Footer>
         <View style={styles.leftFooter}>
-          {getStatusBadge(request.status)}
+          {getStatusBadge(safeRequest.status)}
         </View>
         
         <View style={styles.viewDetails}>

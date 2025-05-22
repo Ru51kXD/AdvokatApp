@@ -106,23 +106,40 @@ const LawyerRequestsScreen = ({ navigation }) => {
       const availableRequests = await RequestService.getAvailableRequests(user.id);
       console.log(`Получено ${availableRequests.length} заявок`);
       
+      // Process requests to prevent circular references
+      const safeRequests = availableRequests.map(req => {
+        const safeRequest = {...req};
+        
+        // Ensure price_range is a simple value, not an object
+        if (typeof safeRequest.price_range === 'object') {
+          safeRequest.price_range = safeRequest.price_range.value || safeRequest.price_range.label || 'medium';
+        }
+        
+        // Ensure law_area is a simple value, not an object
+        if (typeof safeRequest.law_area === 'object') {
+          safeRequest.law_area = safeRequest.law_area.value || safeRequest.law_area.label || 'civil';
+        }
+        
+        return safeRequest;
+      });
+      
       // Даже если массив пуст, мы все равно устанавливаем его в состояние
-      setRequests(availableRequests);
+      setRequests(safeRequests);
       
       // Безопасно проверяем статус REQUEST_STATUS.OPEN
       const OPEN_STATUS = REQUEST_STATUS?.OPEN || 'open';
       
       // Calculate stats for the dashboard safely
-      const newRequestsCount = availableRequests.filter(r => 
+      const newRequestsCount = safeRequests.filter(r => 
         r.status === OPEN_STATUS && 
         !r.hasResponded && 
         new Date(r.created_at) > new Date(Date.now() - 24 * 60 * 60 * 1000)
       ).length;
       
-      const respondedRequestsCount = availableRequests.filter(r => r.hasResponded).length;
+      const respondedRequestsCount = safeRequests.filter(r => r.hasResponded).length;
       
       setStats({
-        totalRequests: availableRequests.length,
+        totalRequests: safeRequests.length,
         newRequests: newRequestsCount,
         respondedRequests: respondedRequestsCount
       });
@@ -270,24 +287,42 @@ const LawyerRequestsScreen = ({ navigation }) => {
       }
       
       // Сохраняем заявки в AsyncStorage
-      AsyncStorage.setItem('mock_requests', JSON.stringify(mockRequests))
+      // Fix circular reference issues by ensuring objects are properly converted
+      const safeRequests = mockRequests.map(req => {
+        const safeRequest = {...req};
+        
+        // Ensure price_range is a simple value, not an object
+        if (typeof safeRequest.price_range === 'object') {
+          safeRequest.price_range = safeRequest.price_range.value || safeRequest.price_range.label || 'medium';
+        }
+        
+        // Ensure law_area is a simple value, not an object
+        if (typeof safeRequest.law_area === 'object') {
+          safeRequest.law_area = safeRequest.law_area.value || safeRequest.law_area.label || 'civil';
+        }
+        
+        // Make sure there are no circular references
+        return safeRequest;
+      });
+      
+      AsyncStorage.setItem('mock_requests', JSON.stringify(safeRequests))
         .then(() => {
-          console.log(`Сохранено ${mockRequests.length} заявок в AsyncStorage`);
+          console.log(`Сохранено ${safeRequests.length} заявок в AsyncStorage`);
           
           // Немедленно обновляем состояние UI
-          setRequests(mockRequests);
+          setRequests(safeRequests);
           
           // Обновляем статистику
-          const newRequestsCount = mockRequests.filter(r => 
+          const newRequestsCount = safeRequests.filter(r => 
             r.status === openStatus && 
             !r.hasResponded && 
             new Date(r.created_at) > new Date(Date.now() - 24 * 60 * 60 * 1000)
           ).length;
           
-          const respondedRequestsCount = mockRequests.filter(r => r.hasResponded).length;
+          const respondedRequestsCount = safeRequests.filter(r => r.hasResponded).length;
           
           setStats({
-            totalRequests: mockRequests.length,
+            totalRequests: safeRequests.length,
             newRequests: newRequestsCount,
             respondedRequests: respondedRequestsCount
           });
@@ -296,7 +331,7 @@ const LawyerRequestsScreen = ({ navigation }) => {
           
           Alert.alert(
             "Заявки добавлены",
-            `${mockRequests.length} тестовых заявок успешно добавлены и отображены.`,
+            `${safeRequests.length} тестовых заявок успешно добавлены и отображены.`,
             [{ text: "OK" }]
           );
         })
@@ -326,8 +361,40 @@ const LawyerRequestsScreen = ({ navigation }) => {
       return [];
     }
     
-    // Start with all requests
-    let result = [...requests];
+    // Функция для безопасной обработки каждого запроса
+    const safeProcessRequest = (req) => {
+      if (!req) return null;
+      
+      // Создаем копию объекта для избежания мутации исходных данных
+      const result = {...req};
+      
+      // Безопасно обрабатываем поля, которые могут быть объектами
+      if (typeof result.law_area === 'object') {
+        result.law_area = 
+          result.law_area.value || 
+          result.law_area.label || 
+          'civil';
+      }
+      
+      if (typeof result.price_range === 'object') {
+        result.price_range = 
+          result.price_range.value || 
+          result.price_range.label || 
+          'medium';
+      }
+      
+      if (typeof result.status === 'object') {
+        result.status = 
+          result.status.value || 
+          result.status.label || 
+          'open';
+      }
+      
+      return result;
+    };
+    
+    // Start with all requests, сначала безопасно обрабатываем каждый запрос
+    let result = requests.map(safeProcessRequest).filter(Boolean);
     
     // Безопасно проверяем статус REQUEST_STATUS.OPEN
     const OPEN_STATUS = REQUEST_STATUS?.OPEN || 'open';
@@ -357,9 +424,9 @@ const LawyerRequestsScreen = ({ navigation }) => {
     if (searchText.trim() !== '') {
       const searchLower = searchText.toLowerCase();
       result = result.filter(r => 
-        (r.title && r.title.toLowerCase().includes(searchLower)) || 
-        (r.description && r.description.toLowerCase().includes(searchLower)) ||
-        (r.client_name && r.client_name.toLowerCase().includes(searchLower))
+        (r.title && String(r.title).toLowerCase().includes(searchLower)) || 
+        (r.description && String(r.description).toLowerCase().includes(searchLower)) ||
+        (r.client_name && String(r.client_name).toLowerCase().includes(searchLower))
       );
     }
     
@@ -397,13 +464,31 @@ const LawyerRequestsScreen = ({ navigation }) => {
     setFilterModalVisible(false);
   };
 
-  const renderItem = ({ item }) => (
-    <RequestCard 
-      request={item} 
-      onPress={() => handleRequestPress(item)}
-      showClientInfo={true}
-    />
-  );
+  const renderItem = ({ item }) => {
+    // Безопасно обрабатываем объект запроса перед передачей в RequestCard
+    const safeItem = {...item};
+    
+    // Преобразуем сложные объекты в строки
+    if (typeof safeItem.law_area === 'object') {
+      safeItem.law_area = safeItem.law_area.value || safeItem.law_area.label || 'civil';
+    }
+    
+    if (typeof safeItem.price_range === 'object') {
+      safeItem.price_range = safeItem.price_range.value || safeItem.price_range.label || 'medium';
+    }
+    
+    if (typeof safeItem.status === 'object') {
+      safeItem.status = safeItem.status.value || safeItem.status.label || 'open';
+    }
+    
+    return (
+      <RequestCard 
+        request={safeItem} 
+        onPress={() => handleRequestPress(safeItem)}
+        showClientInfo={true}
+      />
+    );
+  };
 
   const renderFilterModal = () => {
     return (

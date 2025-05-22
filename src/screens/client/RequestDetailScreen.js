@@ -69,13 +69,40 @@ const RequestDetailScreen = ({ route, navigation }) => {
   const handleAcceptResponse = async (responseId) => {
     try {
       await RequestService.updateResponseStatus(responseId, 'accepted');
-      Alert.alert(
-        'Успешно',
-        'Вы приняли предложение юриста. Теперь вы можете связаться с ним.',
-        [{ text: 'OK' }]
-      );
-      // Обновляем данные после принятия
-      fetchRequestDetails();
+      
+      // Находим выбранный отклик в списке откликов
+      const acceptedResponse = request.responses.find(response => response.id === responseId);
+      
+      if (acceptedResponse) {
+        // Обновляем статус заявки на "in_progress"
+        await RequestService.updateRequestStatus(request.id, REQUEST_STATUS.IN_PROGRESS);
+        
+        // Показываем сообщение об успешном принятии отклика
+        Alert.alert(
+          'Успешно',
+          'Вы приняли предложение юриста. Сейчас вы будете перенаправлены в чат для обсуждения деталей.',
+          [{ 
+            text: 'OK',
+            onPress: () => {
+              // Перенаправляем пользователя в чат с юристом
+              navigation.navigate('ChatScreen', {
+                lawyerId: acceptedResponse.lawyer_id, 
+                title: acceptedResponse.lawyer_name || 'Юрист',
+                requestId: request.id
+              });
+            }
+          }]
+        );
+      } else {
+        // Если по какой-то причине не нашли отклик, просто обновляем данные
+        Alert.alert(
+          'Успешно',
+          'Вы приняли предложение юриста. Теперь вы можете связаться с ним.',
+          [{ text: 'OK' }]
+        );
+        // Обновляем данные
+        fetchRequestDetails();
+      }
     } catch (err) {
       Alert.alert(
         'Ошибка',

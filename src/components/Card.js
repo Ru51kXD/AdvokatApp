@@ -2,6 +2,28 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { COLORS } from '../constants';
 
+// Helper function to safely render any value
+const safeRender = (value) => {
+  try {
+    if (value === null || value === undefined) return '';
+    if (typeof value === 'string') return value;
+    if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+    if (typeof value === 'object') {
+      if (React.isValidElement(value)) return value; // Return React elements as is
+      if (value.hasOwnProperty('label')) return value.label;
+      if (value.hasOwnProperty('name')) return value.name;
+      if (value.hasOwnProperty('value')) return value.value;
+      if (value.hasOwnProperty('id')) return String(value.id);
+      // Предотвращаем преобразование в JSON, что может вызвать ошибку при циклических структурах
+      return ''; // Возвращаем пустую строку вместо JSON.stringify
+    }
+    return String(value);
+  } catch (error) {
+    console.error('Error in safeRender:', error);
+    return ''; // В случае любой ошибки возвращаем пустую строку
+  }
+};
+
 const Card = ({ children, style, onPress }) => {
   if (onPress) {
     return (
@@ -24,7 +46,9 @@ const Card = ({ children, style, onPress }) => {
 
 // Subcomponents for structured card content
 Card.Title = ({ children, style }) => (
-  <Text style={[styles.title, style]}>{children}</Text>
+  <Text style={[styles.title, style]}>
+    {typeof children === 'object' && !React.isValidElement(children) ? safeRender(children) : children}
+  </Text>
 );
 
 Card.Content = ({ children, style }) => (
@@ -46,11 +70,15 @@ Card.Row = ({ children, style, spaceBetween = false }) => (
 );
 
 Card.Label = ({ children, style }) => (
-  <Text style={[styles.label, style]}>{children}</Text>
+  <Text style={[styles.label, style]}>
+    {typeof children === 'object' && !React.isValidElement(children) ? safeRender(children) : children}
+  </Text>
 );
 
 Card.Value = ({ children, style }) => (
-  <Text style={[styles.value, style]}>{children}</Text>
+  <Text style={[styles.value, style]}>
+    {typeof children === 'object' && !React.isValidElement(children) ? safeRender(children) : children}
+  </Text>
 );
 
 Card.Badge = ({ text, type = 'default', style }) => {
@@ -82,7 +110,9 @@ Card.Badge = ({ text, type = 'default', style }) => {
   
   return (
     <View style={[styles.badge, badgeStyle(), style]}>
-      <Text style={[styles.badgeText, textStyle()]}>{text}</Text>
+      <Text style={[styles.badgeText, textStyle()]}>
+        {typeof text === 'object' ? safeRender(text) : text}
+      </Text>
     </View>
   );
 };

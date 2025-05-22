@@ -23,6 +23,21 @@ import { useAuth } from '../../contexts/AuthContext';
 import ChatService from '../../services/ChatService';
 import ImageService from '../../services/ImageService';
 
+// Helper function to safely extract text from possibly nested objects
+const safeText = (value) => {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  if (typeof value === 'object') {
+    if (value.hasOwnProperty('label')) return value.label;
+    if (value.hasOwnProperty('name')) return value.name;
+    if (value.hasOwnProperty('value')) return value.value;
+    if (value.hasOwnProperty('id')) return value.id;
+    return JSON.stringify(value);
+  }
+  return String(value);
+};
+
 const LawyerDetailScreen = ({ route, navigation }) => {
   const { lawyerId, lawyer: initialLawyer } = route.params;
   const { authState } = useAuth();
@@ -101,7 +116,7 @@ const LawyerDetailScreen = ({ route, navigation }) => {
       
       setCreatingChat(true);
       const senderId = user.id;
-      const lawyerId = lawyer.id;
+      const lawyerId = lawyer.user_id;
       const firstMessage = 'Здравствуйте! Я хотел бы обсудить юридический вопрос.';
       
       console.log('Создаем чат между', senderId, 'и', lawyerId);
@@ -115,7 +130,7 @@ const LawyerDetailScreen = ({ route, navigation }) => {
       // Переходим к экрану чата
       navigation.navigate('ChatScreen', {
         conversationId: result.conversation.id,
-        title: lawyer.username || 'Адвокат',
+        title: safeText(lawyer.username) || 'Адвокат',
         guestId: !user ? senderId : null
       });
     } catch (err) {
@@ -162,9 +177,21 @@ const LawyerDetailScreen = ({ route, navigation }) => {
     const color = lawyer && lawyer.id 
       ? ImageService.getLawyerAvatarColor(lawyer.id) 
       : '#cccccc';
-    const initials = lawyer && lawyer.username 
-      ? ImageService.getInitials(lawyer.username)
-      : '??';
+    
+    // Safely get username text
+    const username = safeText(lawyer && lawyer.username);
+    
+    // Get initials from username
+    let initials = "АД"; // Default: "АД" for "Адвокат"
+    if (username) {
+      const parts = username.split(' ');
+      if (parts.length > 1) {
+        initials = parts[0].charAt(0) + parts[1].charAt(0);
+      } else {
+        initials = username.substring(0, 2);
+      }
+      initials = initials.toUpperCase();
+    }
       
     return (
       <View style={[styles.avatarContainer, { backgroundColor: color }]}>
@@ -184,13 +211,13 @@ const LawyerDetailScreen = ({ route, navigation }) => {
   const renderReview = (review, index) => (
     <Card key={review.id || index} style={styles.reviewCard}>
       <View style={styles.reviewHeader}>
-        <Text style={styles.reviewAuthor}>{review.client_name || 'Клиент'}</Text>
+        <Text style={styles.reviewAuthor}>{safeText(review.client_name) || 'Клиент'}</Text>
         <Text style={styles.ratingStars}>
           {'★'.repeat(review.rating)}{'☆'.repeat(5 - review.rating)}
         </Text>
       </View>
       {review.comment && (
-        <Text style={styles.reviewText}>{review.comment}</Text>
+        <Text style={styles.reviewText}>{safeText(review.comment)}</Text>
       )}
       <Text style={styles.reviewDate}>
         {review.created_at ? new Date(review.created_at).toLocaleDateString('ru-RU') : 'Нет даты'}
@@ -236,14 +263,24 @@ const LawyerDetailScreen = ({ route, navigation }) => {
     );
   }
 
+  // Extract values from lawyer data to avoid rendering objects directly
+  const username = safeText(lawyer.username);
+  const specialization = safeText(lawyer.specialization);
+  const experience = lawyer.experience;
+  const priceRange = safeText(lawyer.price_range);
+  const city = safeText(lawyer.city);
+  const address = safeText(lawyer.address);
+  const bio = safeText(lawyer.bio);
+  const reviews = lawyer.reviews || [];
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView>
         <View style={styles.header}>
           {renderAvatar()}
           <View style={styles.headerInfo}>
-            <Text style={styles.name}>{lawyer.username}</Text>
-            <Text style={styles.specialization}>{lawyer.specialization || 'Юрист'}</Text>
+            <Text style={styles.name}>{username || 'Адвокат'}</Text>
+            <Text style={styles.specialization}>{specialization || 'Юрист'}</Text>
             {lawyer.rating > 0 && renderRating(lawyer.rating)}
           </View>
         </View>
@@ -253,57 +290,57 @@ const LawyerDetailScreen = ({ route, navigation }) => {
           
           <Card>
             <Card.Content>
-              {lawyer.experience > 0 && (
+              {experience > 0 && (
                 <Card.Row>
                   <Card.Label>Опыт работы:</Card.Label>
-                  <Card.Value>{lawyer.experience} {getExperienceLabel(lawyer.experience)}</Card.Value>
+                  <Card.Value>{experience} {getExperienceLabel(experience)}</Card.Value>
                 </Card.Row>
               )}
               
-              {lawyer.price_range && (
+              {priceRange && (
                 <Card.Row>
                   <Card.Label>Стоимость услуг:</Card.Label>
-                  <Card.Value>{lawyer.price_range}</Card.Value>
+                  <Card.Value>{priceRange}</Card.Value>
                 </Card.Row>
               )}
               
-              {lawyer.city && (
+              {city && (
                 <Card.Row>
                   <Card.Label>Город:</Card.Label>
-                  <Card.Value>{lawyer.city}</Card.Value>
+                  <Card.Value>{city}</Card.Value>
                 </Card.Row>
               )}
               
-              {lawyer.address && (
+              {address && (
                 <Card.Row>
                   <Card.Label>Адрес:</Card.Label>
-                  <Card.Value>{lawyer.address}</Card.Value>
+                  <Card.Value>{address}</Card.Value>
                 </Card.Row>
               )}
             </Card.Content>
           </Card>
         </View>
 
-        {lawyer.bio && (
+        {bio && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>О себе</Text>
             <Card>
-              <Text style={styles.bioText}>{lawyer.bio}</Text>
+              <Text style={styles.bioText}>{bio}</Text>
             </Card>
           </View>
         )}
 
-        {lawyer.reviews && lawyer.reviews.length > 0 && (
+        {reviews.length > 0 && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Отзывы ({lawyer.reviews.length})</Text>
+            <Text style={styles.sectionTitle}>Отзывы ({reviews.length})</Text>
             
             {/* Показываем первые 3 отзыва или все, если включен режим "показать все" */}
-            {(showAllReviews ? lawyer.reviews : lawyer.reviews.slice(0, 3)).map((review, index) => 
+            {(showAllReviews ? reviews : reviews.slice(0, 3)).map((review, index) => 
               renderReview(review, index)
             )}
             
             {/* Кнопка для показа всех отзывов */}
-            {lawyer.reviews.length > 3 && (
+            {reviews.length > 3 && (
               <TouchableOpacity 
                 style={styles.moreReviews} 
                 onPress={toggleAllReviews}
@@ -311,7 +348,7 @@ const LawyerDetailScreen = ({ route, navigation }) => {
                 <Text style={styles.moreReviewsText}>
                   {showAllReviews 
                     ? "Скрыть отзывы" 
-                    : `Показать все отзывы (${lawyer.reviews.length})`
+                    : `Показать все отзывы (${reviews.length})`
                   }
                 </Text>
               </TouchableOpacity>

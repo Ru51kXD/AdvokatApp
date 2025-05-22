@@ -68,10 +68,55 @@ const ChatScreen = ({ route, navigation }) => {
   const loadMessages = useCallback(async () => {
     try {
       if (!conversationId) {
-        // Если не указан conversationId, но есть requestId или другие данные для идентификации,
+        // Если не указан conversationId, но есть requestId, lawyerId или другие данные для идентификации,
         // попробуем найти или создать беседу
-        const { requestId } = route.params;
-        if (requestId && userId) {
+        const { requestId, lawyerId } = route.params;
+        
+        // Проверяем, есть ли lawyerId - это значит, что переход происходит после принятия отклика
+        if (lawyerId && userId) {
+          console.log('ChatScreen: No conversationId, but have lawyerId. Creating or finding conversation with lawyer', lawyerId);
+          setLoading(true);
+          
+          // Определяем ID клиента (текущий пользователь) и адвоката (из параметров)
+          const clientId = userId;
+          
+          // Ищем существующую беседу для этого юриста и клиента
+          const conversations = await ChatService.getConversations(userId);
+          let existingConversation = conversations.find(c => 
+            (c.client_id === clientId && c.lawyer_id === lawyerId) ||
+            (requestId && c.request_id === requestId)
+          );
+          
+          if (existingConversation) {
+            console.log('ChatScreen: Found existing conversation', existingConversation.id);
+            // Используем найденную беседу
+            navigation.setParams({ conversationId: existingConversation.id });
+            const result = await ChatService.getMessages(existingConversation.id);
+            setMessages(result.messages);
+            setConversation(result.conversation);
+            
+            // Отмечаем сообщения как прочитанные
+            if (authState.user && !isGuest) {
+              await ChatService.markMessagesAsRead(existingConversation.id, authState.user.id);
+            }
+          } else {
+            console.log('ChatScreen: No existing conversation found, creating a new one');
+            // Создаем "пустую" беседу и показываем чат без сообщений
+            setMessages([]);
+            setConversation({
+              client_id: clientId,
+              lawyer_id: lawyerId,
+              request_id: requestId
+            });
+            setError(null);
+          }
+          
+          setLoading(false);
+          return;
+        }
+        
+        // Проверяем, есть ли requestId - для создания чата по заявке
+        else if (requestId && userId) {
           console.log('ChatScreen: No conversationId, but have requestId. Trying to find or create conversation for request', requestId);
           setLoading(true);
           
@@ -271,13 +316,16 @@ const ChatScreen = ({ route, navigation }) => {
       
       // Определяем получателя
       let receiverId;
-      const { requestId } = route.params;
+      const { requestId, lawyerId } = route.params;
       
       if (conversation) {
         // Если у нас уже есть информация о беседе
         receiverId = isGuest || (authState.user && authState.user.id === conversation.client_id)
           ? conversation.lawyer_id 
           : conversation.client_id;
+      } else if (lawyerId) {
+        // Если у нас есть ID юриста (после принятия отклика)
+        receiverId = lawyerId;
       } else if (requestId) {
         // Если у нас нет беседы, но есть requestId
         const { RequestService } = await import('../../services/RequestService');

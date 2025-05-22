@@ -2,6 +2,29 @@ import { db, getDatabase } from '../database/database';
 import { LAW_AREAS, PRICE_RANGES, REQUEST_STATUS } from '../constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+// Helper function to safely process objects and prevent circular references
+const safeProcessObject = (obj) => {
+  if (!obj) return obj;
+  
+  const result = {...obj};
+  
+  // Handle possible object values that should be simple strings
+  if (typeof result.law_area === 'object') {
+    result.law_area = result.law_area.value || result.law_area.label || 'civil';
+  }
+  
+  if (typeof result.price_range === 'object') {
+    result.price_range = result.price_range.value || result.price_range.label || 'medium';
+  }
+  
+  if (typeof result.status === 'object') {
+    result.status = result.status.value || result.status.label || 'open';
+  }
+  
+  // Ensure any objects that might cause circular references are simplified
+  return result;
+};
+
 // Тестовые данные для 20 заявок клиентов
 const mockClientNames = [
   'Александр Иванов', 'Елена Петрова', 'Михаил Сидоров', 'Ольга Кузнецова', 
@@ -94,14 +117,18 @@ export const RequestService = {
               ? Math.max(...savedRequests.map(r => r.id)) + 1
               : 1;
             
+            // Safely process law_area and price_range to prevent circular references
+            const safeLawArea = typeof law_area === 'object' ? (law_area.value || law_area.label) : law_area;
+            const safePriceRange = typeof price_range === 'object' ? (price_range.value || price_range.label) : price_range;
+            
             // Создаем объект новой заявки
             const newRequest = {
               id: newId,
               client_id: clientId,
               title,
               description,
-              law_area,
-              price_range,
+              law_area: safeLawArea,
+              price_range: safePriceRange,
               experience_required,
               created_at: currentDate,
               status: 'open',
@@ -115,6 +142,12 @@ export const RequestService = {
             await AsyncStorage.setItem('user_requests', JSON.stringify(savedRequests));
             
             console.log('Заявка успешно сохранена в AsyncStorage:', newRequest);
+            
+            // Обновляем статистику пользователя
+            RequestService.getRequestsStatistics(clientId).catch(err => 
+              console.error('Не удалось обновить статистику:', err)
+            );
+            
             resolve(newRequest);
             return;
           } catch (error) {
@@ -146,6 +179,12 @@ export const RequestService = {
                   response_count: 0
                 };
                 console.log('Заявка успешно сохранена в SQLite:', newRequest);
+                
+                // Обновляем статистику пользователя
+                RequestService.getRequestsStatistics(clientId).catch(err => 
+                  console.error('Не удалось обновить статистику:', err)
+                );
+                
                 resolve(newRequest);
               },
               (_, error) => {
@@ -299,8 +338,42 @@ export const RequestService = {
   getAvailableRequests: async (lawyerId) => {
     return new Promise(async (resolve, reject) => {
       try {
-        console.log('Загружаем заявки из AsyncStorage...');
+        console.log('Getting available requests for lawyer ID:', lawyerId);
         
+        // Для демо-режима используем тестовые данные
+        const isDemoMode = true; // Для демонстрации
+        
+        if (isDemoMode) {
+          try {
+            // Получаем сохраненные тестовые заявки из AsyncStorage
+            const savedRequestsStr = await AsyncStorage.getItem('mock_requests') || '[]';
+            let mockRequests = JSON.parse(savedRequestsStr);
+            
+            if (mockRequests.length === 0) {
+              // Если тестовых заявок нет, возвращаем пустой массив
+              console.log('No mock requests found in AsyncStorage');
+              resolve([]);
+              return;
+            }
+            
+            console.log(`Found ${mockRequests.length} mock requests in AsyncStorage`);
+            
+            // Process objects to prevent circular references
+            mockRequests = mockRequests.map(request => safeProcessObject(request));
+            
+            // Сортируем по дате создания (новые сверху)
+            mockRequests.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+            
+            resolve(mockRequests);
+            return;
+          } catch (error) {
+            console.error('Error reading mock requests from AsyncStorage:', error);
+            reject(error);
+            return;
+          }
+        }
+        
+        // Если не демо-режим или чтение из AsyncStorage не удалось, используем SQLite
         // Инициализируем базу данных перед использованием
         await getDatabase();
         
@@ -729,5 +802,139 @@ export const RequestService = {
       console.error('Error initializing demo data:', error);
       return false;
     }
+  },
+
+  // Получение статистики заявок пользователя
+  getRequestsStatistics: async (clientId) => {
+    return new Promise(async (resolve, reject) => {
+      try {
+        console.log('Getting request statistics for client ID:', clientId);
+        
+        // Получаем все заявки пользователя
+        const clientRequests = await RequestService.getClientRequests(clientId);
+        
+        // Формируем статистику
+        const statistics = {
+          total: clientRequests.length,
+          open: clientRequests.filter(req => req.status === 'open').length,
+          inProgress: clientRequests.filter(req => req.status === 'in_progress').length,
+          completed: clientRequests.filter(req => req.status === 'completed').length,
+          cancelled: clientRequests.filter(req => req.status === 'cancelled').length,
+          totalResponses: clientRequests.reduce((sum, req) => sum + (req.response_count || 0), 0),
+          // Добавляем timestamp последнего обновления статистики
+          lastUpdated: new Date().toISOString()
+        };
+        
+        console.log('Request statistics:', statistics);
+        
+        // Сохраняем статистику в AsyncStorage для быстрого доступа
+        await AsyncStorage.setItem(`user_statistics_${clientId}`, JSON.stringify(statistics));
+        
+        resolve(statistics);
+      } catch (error) {
+        console.error('Error getting request statistics:', error);
+        reject(error);
+      }
+    });
+  },
+
+  // Обновление статуса заявки
+  updateRequestStatus: async (requestId, newStatus) => {
+    return new Promise(async (resolve, reject) => {
+      try {
+        console.log(`Updating request status: requestId=${requestId}, newStatus=${newStatus}`);
+        
+        // Инициализируем базу данных перед использованием
+        await getDatabase();
+        
+        // Для демо-режима используем AsyncStorage
+        const isDemoMode = true; // Для демонстрации
+        
+        if (isDemoMode) {
+          try {
+            // Получаем текущие заявки из AsyncStorage
+            const savedRequestsStr = await AsyncStorage.getItem('user_requests') || '[]';
+            const savedRequests = JSON.parse(savedRequestsStr);
+            
+            // Находим и обновляем нужную заявку
+            const updatedRequests = savedRequests.map(request => {
+              if (request.id === requestId) {
+                console.log(`Found request to update: ${request.id}`);
+                return { ...request, status: newStatus };
+              }
+              return request;
+            });
+            
+            // Сохраняем обновленный массив
+            await AsyncStorage.setItem('user_requests', JSON.stringify(updatedRequests));
+            
+            const updatedRequest = updatedRequests.find(request => request.id === requestId);
+            
+            // Обновляем статистику клиента
+            if (updatedRequest && updatedRequest.client_id) {
+              RequestService.getRequestsStatistics(updatedRequest.client_id)
+                .catch(err => console.error('Не удалось обновить статистику клиента:', err));
+            }
+            
+            console.log('Request status updated successfully in AsyncStorage');
+            resolve(updatedRequest || { id: requestId, status: newStatus });
+            return;
+          } catch (error) {
+            console.error('Error updating request status in AsyncStorage:', error);
+            // В случае ошибки пробуем обновить в SQLite
+          }
+        }
+        
+        // SQLite-реализация
+        db.transaction(
+          (tx) => {
+            tx.executeSql(
+              'UPDATE requests SET status = ? WHERE id = ?',
+              [newStatus, requestId],
+              async (_, result) => {
+                if (result.rowsAffected > 0) {
+                  console.log('Request status updated successfully in SQLite');
+                  
+                  // Получаем обновленную заявку
+                  tx.executeSql(
+                    'SELECT * FROM requests WHERE id = ?',
+                    [requestId],
+                    (_, { rows }) => {
+                      const updatedRequest = rows.item(0);
+                      
+                      // Обновляем статистику клиента
+                      if (updatedRequest && updatedRequest.client_id) {
+                        RequestService.getRequestsStatistics(updatedRequest.client_id)
+                          .catch(err => console.error('Не удалось обновить статистику клиента:', err));
+                      }
+                      
+                      resolve(updatedRequest);
+                    },
+                    (_, error) => {
+                      console.error('Error fetching updated request:', error);
+                      resolve({ id: requestId, status: newStatus });
+                    }
+                  );
+                } else {
+                  console.error('No request found with ID:', requestId);
+                  reject(new Error('Request not found'));
+                }
+              },
+              (_, error) => {
+                console.error('SQL error when updating request status:', error);
+                reject(error);
+              }
+            );
+          },
+          (error) => {
+            console.error('Transaction error when updating request status:', error);
+            reject(error);
+          }
+        );
+      } catch (error) {
+        console.error('Error updating request status:', error);
+        reject(error);
+      }
+    });
   },
 }; 

@@ -8,6 +8,21 @@ import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../contexts/AuthContext';
 import ChatService from '../services/ChatService';
 
+// Helper function to safely extract text from possibly nested objects
+const safeText = (value) => {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  if (typeof value === 'object') {
+    if (value.hasOwnProperty('label')) return value.label;
+    if (value.hasOwnProperty('name')) return value.name;
+    if (value.hasOwnProperty('value')) return value.value;
+    if (value.hasOwnProperty('id')) return value.id;
+    return JSON.stringify(value);
+  }
+  return String(value);
+};
+
 const LawyerCard = ({ lawyer, onPress }) => {
   const navigation = useNavigation();
   const { authState } = useAuth();
@@ -17,8 +32,16 @@ const LawyerCard = ({ lawyer, onPress }) => {
     return null;
   }
 
+  // Extract values from possibly nested objects
+  const specialization = safeText(lawyer.specialization);
+  const priceRange = safeText(lawyer.price_range);
+  const city = safeText(lawyer.city);
+  const username = lawyer.username;
+
   // Handle message button press
-  const handleMessagePress = async () => {
+  const handleMessagePress = async (e) => {
+    e.stopPropagation(); // Prevent triggering parent onPress
+    
     if (!lawyer || !lawyer.user_id) {
       Alert.alert(
         'Ошибка',
@@ -47,7 +70,7 @@ const LawyerCard = ({ lawyer, onPress }) => {
       // Переходим к экрану чата
       navigation.navigate('ChatScreen', {
         conversationId: result.conversation.id,
-        title: lawyer.username || lawyer.name || 'Адвокат',
+        title: username || 'Адвокат',
         guestId: !user ? senderId : null
       });
     } catch (err) {
@@ -90,9 +113,21 @@ const LawyerCard = ({ lawyer, onPress }) => {
     const color = lawyer.id 
       ? ImageService.getLawyerAvatarColor(lawyer.id) 
       : '#cccccc';
-    const initials = lawyer.username 
-      ? ImageService.getInitials(lawyer.username)
-      : '??';
+    
+    // Get lawyer initials - directly compute if needed
+    let initials;
+    if (typeof username === 'string' && username.trim() !== '') {
+      const name = username.trim();
+      const parts = name.split(' ');
+      if (parts.length > 1) {
+        initials = parts[0].charAt(0) + parts[1].charAt(0);
+      } else {
+        initials = name.substring(0, 2);
+      }
+      initials = initials.toUpperCase();
+    } else {
+      initials = 'АД';
+    }
       
     return (
       <View style={[styles.avatar, { backgroundColor: color }]}>
@@ -111,9 +146,9 @@ const LawyerCard = ({ lawyer, onPress }) => {
         <View style={styles.header}>
           {renderAvatar()}
           <View style={styles.headerInfo}>
-            <Text style={styles.name}>{lawyer.username || 'Адвокат'}</Text>
+            <Text style={styles.name}>{username || 'Адвокат'}</Text>
             <Text style={styles.specialization}>
-              {lawyer.specialization || 'Общая практика'}
+              {specialization || 'Общая практика'}
             </Text>
             {renderRating(lawyer.rating)}
           </View>
@@ -130,24 +165,24 @@ const LawyerCard = ({ lawyer, onPress }) => {
             </Card.Row>
           )}
           
-          {lawyer.price_range && (
+          {priceRange && (
             <Card.Row>
               <Card.Label>Стоимость услуг:</Card.Label>
-              <Card.Value>{lawyer.price_range}</Card.Value>
+              <Card.Value>{priceRange}</Card.Value>
             </Card.Row>
           )}
           
-          {lawyer.city && (
+          {city && (
             <Card.Row>
               <Card.Label>Город:</Card.Label>
-              <Card.Value>{lawyer.city}</Card.Value>
+              <Card.Value>{city}</Card.Value>
             </Card.Row>
           )}
         </Card.Content>
         
         {lawyer.bio && (
           <Text style={styles.bio} numberOfLines={2}>
-            {lawyer.bio}
+            {safeText(lawyer.bio)}
           </Text>
         )}
         
@@ -167,7 +202,9 @@ const LawyerCard = ({ lawyer, onPress }) => {
                 <Text style={styles.messageButtonText}>Написать</Text>
               </TouchableOpacity>
               
-              <Text style={styles.contactInfo}>Подробнее</Text>
+              <TouchableOpacity onPress={onPress}>
+                <Text style={styles.contactInfo}>Подробнее</Text>
+              </TouchableOpacity>
             </View>
           </View>
         </Card.Footer>

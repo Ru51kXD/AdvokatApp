@@ -11,6 +11,18 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../constants';
 
+// Helper function to ensure we never render objects directly as React children
+const safeTextValue = (value) => {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  if (typeof value === 'object') {
+    if (Array.isArray(value)) return '[Array]';
+    return '[Object]';
+  }
+  return String(value);
+};
+
 const Picker = ({ 
   label, 
   placeholder, 
@@ -21,16 +33,31 @@ const Picker = ({
 }) => {
   const [modalVisible, setModalVisible] = useState(false);
   
-  const selectedItem = items.find(item => item.value === value);
+  // Ensure all items have valid label and value properties
+  const validItems = Array.isArray(items) ? items.filter(item => 
+    item && 
+    typeof item === 'object' && 
+    'value' in item && 
+    'label' in item
+  ) : [];
+  
+  const selectedItem = validItems.find(item => item.value === value);
   
   const handleSelect = (selectedValue) => {
     onValueChange(selectedValue);
     setModalVisible(false);
   };
   
+  // Safely get display text for the selected item
+  const getDisplayText = () => {
+    if (!selectedItem) return placeholder || '';
+    
+    return safeTextValue(selectedItem.label);
+  };
+  
   return (
     <View style={styles.container}>
-      {label && <Text style={styles.label}>{label}</Text>}
+      {label && <Text style={styles.label}>{safeTextValue(label)}</Text>}
       
       <TouchableOpacity 
         style={[
@@ -46,12 +73,12 @@ const Picker = ({
           ]}
           numberOfLines={1}
         >
-          {selectedItem ? selectedItem.label : placeholder}
+          {getDisplayText()}
         </Text>
         <Ionicons name="chevron-down" size={16} color={COLORS.textSecondary} />
       </TouchableOpacity>
       
-      {error && <Text style={styles.errorText}>{error}</Text>}
+      {error && <Text style={styles.errorText}>{safeTextValue(error)}</Text>}
       
       <Modal
         visible={modalVisible}
@@ -67,7 +94,7 @@ const Picker = ({
           <SafeAreaView style={styles.modalContainer}>
             <View style={styles.modalContent}>
               <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>{label}</Text>
+                <Text style={styles.modalTitle}>{safeTextValue(label)}</Text>
                 <TouchableOpacity 
                   style={styles.closeButton}
                   onPress={() => setModalVisible(false)}
@@ -77,8 +104,8 @@ const Picker = ({
               </View>
               
               <FlatList
-                data={items}
-                keyExtractor={(item) => item.value}
+                data={validItems}
+                keyExtractor={(item) => String(item.value || Math.random())}
                 renderItem={({ item }) => (
                   <TouchableOpacity
                     style={[
@@ -91,7 +118,7 @@ const Picker = ({
                       styles.optionText,
                       item.value === value ? styles.selectedOptionText : null
                     ]}>
-                      {item.label}
+                      {safeTextValue(item.label)}
                     </Text>
                     {item.value === value && (
                       <Ionicons name="checkmark" size={20} color={COLORS.primary} />

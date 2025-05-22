@@ -157,6 +157,9 @@ const LawyerListScreen = ({ route, navigation }) => {
   const renderEmpty = useCallback(() => {
     if (loading) return null;
     
+    const safeDebugInfo = typeof debugInfo === 'string' ? debugInfo : 
+                          debugInfo ? JSON.stringify(debugInfo) : '';
+    
     return (
       <View style={styles.emptyContainer}>
         <Ionicons name="search-outline" size={48} color={COLORS.textSecondary} />
@@ -166,9 +169,9 @@ const LawyerListScreen = ({ route, navigation }) => {
         <Text style={styles.emptySubText}>
           Пожалуйста, измените параметры поиска или создайте заявку.
         </Text>
-        {debugInfo && (
-          <Text style={styles.debugText}>{debugInfo}</Text>
-        )}
+        {safeDebugInfo ? (
+          <Text style={styles.debugText}>{safeDebugInfo}</Text>
+        ) : null}
         <TouchableOpacity 
           style={styles.createRequestButton}
           onPress={() => navigation.navigate('Request')}
@@ -227,8 +230,10 @@ const LawyerListScreen = ({ route, navigation }) => {
           </Text>
           {filters.category && (
             <Text style={styles.debugText}>
-              Поиск по категории: {filters.category}
-              {debugInfo && `\n${debugInfo}`}
+              Поиск по категории: {typeof filters.category === 'object' ? 
+                (filters.category.id || filters.category.value || JSON.stringify(filters.category)) : 
+                filters.category}
+              {debugInfo && typeof debugInfo === 'string' ? `\n${debugInfo}` : ''}
             </Text>
           )}
           

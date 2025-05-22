@@ -18,13 +18,40 @@ import Button from '../../components/Button';
 import Picker from '../../components/Picker';
 import SearchBar from '../../components/SearchBar';
 
+// Helper function to validate and format picker items
+const validatePickerItems = (items) => {
+  if (!Array.isArray(items)) return [];
+  
+  return items.filter(item => 
+    item && 
+    typeof item === 'object' && 
+    'value' in item && 
+    'label' in item &&
+    (typeof item.label === 'string' || typeof item.label === 'number')
+  );
+};
+
+// Helper function to ensure all values are primitive (not objects)
+const sanitizeValueForRendering = (value) => {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return value;
+  if (typeof value === 'object') {
+    if (value.hasOwnProperty('label')) return value.label;
+    if (value.hasOwnProperty('name')) return value.name;
+    if (value.hasOwnProperty('value')) return value.value;
+    if (value.hasOwnProperty('id')) return value.id;
+    return JSON.stringify(value);
+  }
+  return String(value);
+};
+
 const SearchScreen = ({ navigation }) => {
   const [showFilters, setShowFilters] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [selectedFilters, setSelectedFilters] = useState([]);
   
-  // Определение категорий для поиска
+  // Определение категорий для поиска - используем строковые значения вместо объектов
   const categories = [
     { id: 1, name: 'Уголовное право' },
     { id: 2, name: 'Гражданское право' },
@@ -33,7 +60,7 @@ const SearchScreen = ({ navigation }) => {
     { id: 5, name: 'Трудовое право' }
   ];
   
-  // Определение фильтров
+  // Определение фильтров - убедимся, что все значения строковые
   const filters = [
     { id: 1, name: 'Рейтинг > 4.5' },
     { id: 2, name: 'Опыт > 5 лет' },
@@ -42,12 +69,16 @@ const SearchScreen = ({ navigation }) => {
   ];
 
   const handleSearch = (values) => {
-    // Объединяем все параметры поиска
+    // Убедимся, что передаем только примитивные значения, а не объекты
     const searchParams = {
-      ...values,
-      query: searchQuery,
-      category: selectedCategory,
-      additionalFilters: selectedFilters,
+      specialization: values.specialization ? String(values.specialization) : '',
+      priceRange: values.priceRange ? String(values.priceRange) : '',
+      city: values.city ? String(values.city) : '',
+      minExperience: values.minExperience ? String(values.minExperience) : '',
+      minRating: values.minRating ? Number(values.minRating) : '',
+      query: searchQuery ? String(searchQuery) : '',
+      category: selectedCategory ? Number(selectedCategory) : null,
+      additionalFilters: selectedFilters ? [...selectedFilters] : [],
     };
     
     // Navigate to LawyerListScreen with search filters
@@ -66,6 +97,11 @@ const SearchScreen = ({ navigation }) => {
     }
   };
 
+  // Validate and format data for pickers - ensure we only have valid items
+  const validCities = validatePickerItems(KAZAKHSTAN_CITIES) || [];
+  const validPriceRanges = validatePickerItems(PRICE_RANGES) || [];
+  const validExperienceOptions = validatePickerItems(EXPERIENCE_OPTIONS) || [];
+
   return (
     <SafeAreaView edges={['bottom']} style={styles.container}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
@@ -79,7 +115,7 @@ const SearchScreen = ({ navigation }) => {
         {/* Современный поисковый компонент */}
         <SearchBar
           value={searchQuery}
-          onChangeText={setSearchQuery}
+          onChangeText={(text) => setSearchQuery(String(text))}
           placeholder="Поиск по имени, специализации..."
           onSubmit={() => {
             const values = {
@@ -95,6 +131,7 @@ const SearchScreen = ({ navigation }) => {
         
         {/* Категории */}
         <Text style={styles.sectionTitle}>Категории</Text>
+        
         <ScrollView 
           horizontal 
           showsHorizontalScrollIndicator={false} 
@@ -102,7 +139,7 @@ const SearchScreen = ({ navigation }) => {
         >
           {categories.map((category) => (
             <TouchableOpacity
-              key={category.id}
+              key={typeof category.id === 'number' ? category.id : String(category.id)}
               style={[
                 styles.categoryItem,
                 selectedCategory === category.id && styles.categoryItemSelected
@@ -117,7 +154,7 @@ const SearchScreen = ({ navigation }) => {
                   selectedCategory === category.id && styles.categoryTextSelected
                 ]}
               >
-                {category.name}
+                {typeof category.name === 'string' ? category.name : String(category.name)}
               </Text>
             </TouchableOpacity>
           ))}
@@ -137,7 +174,7 @@ const SearchScreen = ({ navigation }) => {
           <View style={styles.filtersContainer}>
             {filters.map((filter) => (
               <TouchableOpacity
-                key={filter.id}
+                key={typeof filter.id === 'number' ? filter.id : String(filter.id)}
                 style={[
                   styles.filterItem,
                   selectedFilters.includes(filter.id) && styles.filterItemSelected
@@ -150,7 +187,7 @@ const SearchScreen = ({ navigation }) => {
                     selectedFilters.includes(filter.id) && styles.filterTextSelected
                   ]}
                 >
-                  {filter.name}
+                  {typeof filter.name === 'string' ? filter.name : String(filter.name)}
                 </Text>
                 {selectedFilters.includes(filter.id) && (
                   <Ionicons name="checkmark" size={16} color={COLORS.white} />
@@ -191,7 +228,7 @@ const SearchScreen = ({ navigation }) => {
                   <Picker
                     label="Город"
                     placeholder="Выберите город"
-                    items={KAZAKHSTAN_CITIES}
+                    items={validCities}
                     value={values.city}
                     onValueChange={(value) => setFieldValue('city', value)}
                   />
@@ -199,7 +236,7 @@ const SearchScreen = ({ navigation }) => {
                   <Picker
                     label="Стоимость услуг"
                     placeholder="Выберите диапазон стоимости"
-                    items={PRICE_RANGES}
+                    items={validPriceRanges}
                     value={values.priceRange}
                     onValueChange={(value) => setFieldValue('priceRange', value)}
                   />
@@ -207,7 +244,7 @@ const SearchScreen = ({ navigation }) => {
                   <Picker
                     label="Минимальный опыт"
                     placeholder="Выберите минимальный опыт"
-                    items={EXPERIENCE_OPTIONS}
+                    items={validExperienceOptions}
                     value={values.minExperience}
                     onValueChange={(value) => setFieldValue('minExperience', value)}
                   />
