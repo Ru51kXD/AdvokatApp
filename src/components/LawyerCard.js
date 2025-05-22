@@ -10,7 +10,8 @@ import ChatService from '../services/ChatService';
 
 const LawyerCard = ({ lawyer, onPress }) => {
   const navigation = useNavigation();
-  const { user } = useAuth();
+  const { authState } = useAuth();
+  const user = authState.user;
 
   if (!lawyer) {
     return null;

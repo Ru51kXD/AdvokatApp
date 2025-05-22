@@ -11,6 +11,7 @@ import { PermissionsProvider } from '../../src/contexts/PermissionsContext';
 import { initDatabase, showTableStructure, showTableContents } from '../../src/database/database';
 import SeedDataService from '../../src/services/SeedDataService';
 import ImageService from '../../src/services/ImageService';
+import { RequestService } from '../../src/services/RequestService';
 
 import { useEffect, useState } from 'react';
 import { View, Text, ActivityIndicator, StyleSheet, Alert } from 'react-native';
@@ -43,6 +44,10 @@ export default function Page() {
         
         // Инициализируем сервис изображений
         await ImageService.init();
+        
+        // Инициализируем демо-данные
+        await RequestService.initDemoData();
+        console.log('Demo data initialized');
         
         setIsLoading(false);
       } catch (err) {

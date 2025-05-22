@@ -173,7 +173,7 @@ const NewChatScreen = ({ navigation }) => {
           {!authState.isAuthenticated && (
             <TouchableOpacity
               style={styles.retryButton}
-              onPress={() => navigation.navigate('LoginScreen')}
+              onPress={() => navigation.navigate('Login')}
             >
               <Text style={styles.retryText}>Войти</Text>
             </TouchableOpacity>

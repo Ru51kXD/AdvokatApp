@@ -129,6 +129,11 @@ const ClientProfileStack = () => (
       options={{ headerShown: false }} 
     />
     <Stack.Screen 
+      name="Request" 
+      component={RequestScreen} 
+      options={{ title: 'Создать заявку' }} 
+    />
+    <Stack.Screen 
       name="AdminScreen" 
       component={AdminScreen} 
       options={{ title: 'Панель администратора' }} 
@@ -230,6 +235,11 @@ const LawyerProfileStack = () => (
       options={{ headerShown: false }} 
     />
     <Stack.Screen 
+      name="Request" 
+      component={RequestScreen} 
+      options={{ title: 'Создать заявку' }} 
+    />
+    <Stack.Screen 
       name="AdminScreen" 
       component={AdminScreen} 
       options={{ title: 'Панель администратора' }} 
@@ -322,6 +332,11 @@ const ClientRequestsScreenStack = () => (
       name="RequestDetail" 
       component={RequestDetailScreen} 
       options={{ title: 'Детали заявки' }} 
+    />
+    <Stack.Screen 
+      name="Request" 
+      component={RequestScreen} 
+      options={{ title: 'Создать заявку' }} 
     />
     <Stack.Screen 
       name="LawyerDetail" 

@@ -19,7 +19,8 @@ import { RequestService } from '../../services/RequestService';
 import { useAuth } from '../../contexts/AuthContext';
 
 const ClientRequestsScreen = ({ navigation }) => {
-  const { user } = useAuth();
+  const { authState } = useAuth();
+  const user = authState.user;
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -37,8 +38,13 @@ const ClientRequestsScreen = ({ navigation }) => {
     setIsGuest(false);
     setLoading(true);
     try {
+      console.log('Fetching requests for user ID:', user.id);
       const clientRequests = await RequestService.getClientRequests(user.id);
+      console.log('Received requests:', clientRequests);
+      
+      // Просто используем полученные заявки, без добавления тестовых
       setRequests(clientRequests);
+      
       setError(null);
     } catch (err) {
       console.error('Error fetching requests:', err);

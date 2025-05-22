@@ -25,7 +25,8 @@ import ImageService from '../../services/ImageService';
 
 const LawyerDetailScreen = ({ route, navigation }) => {
   const { lawyerId, lawyer: initialLawyer } = route.params;
-  const { user } = useAuth();
+  const { authState } = useAuth();
+  const user = authState.user;
   
   const [lawyer, setLawyer] = useState(initialLawyer || null);
   const [loading, setLoading] = useState(!initialLawyer);

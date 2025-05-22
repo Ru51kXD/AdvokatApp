@@ -60,7 +60,8 @@ const MOCK_CONVERSATIONS = [
 ];
 
 const ConversationsScreen = ({ navigation }) => {
-  const { user } = useAuth();
+  const { authState } = useAuth();
+  const user = authState.user;
   const [conversations, setConversations] = useState([]);
   const [filteredConversations, setFilteredConversations] = useState([]);
   const [loading, setLoading] = useState(false);

@@ -1,4 +1,4 @@
-import { db } from '../database/database';
+import { db, getDatabase } from '../database/database';
 import { LAW_AREAS, PRICE_RANGES, REQUEST_STATUS } from '../constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -66,111 +66,243 @@ const DEFAULT_PRICE_RANGES = [
 
 export const RequestService = {
   // Create a new request
-  createRequest: (clientId, requestData) => {
+  createRequest: async (clientId, requestData) => {
     const { title, description, law_area, price_range, experience_required } = requestData;
 
-    return new Promise((resolve, reject) => {
-      db.transaction(
-        (tx) => {
-          tx.executeSql(
-            `INSERT INTO requests 
-             (client_id, title, description, law_area, price_range, experience_required) 
-             VALUES (?, ?, ?, ?, ?, ?)`,
-            [clientId, title, description, law_area, price_range, experience_required],
-            (_, { insertId }) => {
-              resolve(insertId);
-            },
-            (_, error) => {
-              reject(error);
-            }
-          );
+    return new Promise(async (resolve, reject) => {
+      try {
+        console.log('Создание новой заявки:', { clientId, ...requestData });
+        
+        // Инициализируем базу данных перед использованием
+        await getDatabase();
+        
+        const currentDate = new Date().toISOString();
+        
+        // Для демо-режима используем AsyncStorage
+        const isDemoMode = true; // Для демонстрации
+        
+        if (isDemoMode) {
+          try {
+            // Получаем текущие заявки из AsyncStorage
+            const savedRequestsStr = await AsyncStorage.getItem('user_requests') || '[]';
+            const savedRequests = JSON.parse(savedRequestsStr);
+            
+            console.log('Существующие заявки:', savedRequests.length);
+            
+            // Генерируем ID для новой заявки
+            const newId = savedRequests.length > 0 
+              ? Math.max(...savedRequests.map(r => r.id)) + 1
+              : 1;
+            
+            // Создаем объект новой заявки
+            const newRequest = {
+              id: newId,
+              client_id: clientId,
+              title,
+              description,
+              law_area,
+              price_range,
+              experience_required,
+              created_at: currentDate,
+              status: 'open',
+              response_count: 0
+            };
+            
+            // Добавляем новую заявку в массив
+            savedRequests.push(newRequest);
+            
+            // Сохраняем обновленный массив
+            await AsyncStorage.setItem('user_requests', JSON.stringify(savedRequests));
+            
+            console.log('Заявка успешно сохранена в AsyncStorage:', newRequest);
+            resolve(newRequest);
+            return;
+          } catch (error) {
+            console.error('Ошибка при сохранении заявки в AsyncStorage:', error);
+            // В случае ошибки пробуем сохранить в SQLite
+          }
         }
-      );
+        
+        // Если не демо-режим или сохранение в AsyncStorage не удалось, используем SQLite
+        db.transaction(
+          (tx) => {
+            tx.executeSql(
+              `INSERT INTO requests 
+               (client_id, title, description, law_area, price_range, experience_required, created_at, status) 
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+              [clientId, title, description, law_area, price_range, experience_required, currentDate, 'open'],
+              (_, { insertId }) => {
+                // Вернем более подробную информацию о созданной заявке
+                const newRequest = {
+                  id: insertId,
+                  client_id: clientId,
+                  title,
+                  description,
+                  law_area,
+                  price_range,
+                  experience_required,
+                  created_at: currentDate,
+                  status: 'open',
+                  response_count: 0
+                };
+                console.log('Заявка успешно сохранена в SQLite:', newRequest);
+                resolve(newRequest);
+              },
+              (_, error) => {
+                console.error('Ошибка при выполнении SQL-запроса:', error);
+                reject(error);
+              }
+            );
+          },
+          (error) => {
+            console.error('Ошибка транзакции:', error);
+            reject(error);
+          }
+        );
+      } catch (error) {
+        console.error('Ошибка при создании заявки:', error);
+        reject(error);
+      }
     });
   },
 
   // Get requests by client ID
-  getClientRequests: (clientId) => {
-    return new Promise((resolve, reject) => {
-      db.transaction(
-        (tx) => {
-          tx.executeSql(
-            `SELECT r.*, (SELECT COUNT(*) FROM responses WHERE request_id = r.id) as response_count
-             FROM requests r 
-             WHERE r.client_id = ? 
-             ORDER BY r.created_at DESC`,
-            [clientId],
-            (_, { rows }) => {
-              const requests = [];
-              for (let i = 0; i < rows.length; i++) {
-                requests.push(rows.item(i));
-              }
-              resolve(requests);
-            },
-            (_, error) => {
-              reject(error);
-            }
-          );
+  getClientRequests: async (clientId) => {
+    return new Promise(async (resolve, reject) => {
+      try {
+        console.log('Getting client requests for client ID:', clientId);
+        
+        // Для демо-режима используем AsyncStorage
+        const isDemoMode = true; // Для демонстрации
+        
+        if (isDemoMode) {
+          try {
+            // Получаем сохраненные заявки пользователя из AsyncStorage
+            const savedRequestsStr = await AsyncStorage.getItem('user_requests') || '[]';
+            const savedRequests = JSON.parse(savedRequestsStr);
+            
+            // Фильтруем заявки по ID клиента
+            const clientRequests = savedRequests.filter(request => request.client_id === clientId);
+            
+            console.log(`Найдено ${clientRequests.length} заявок для клиента ${clientId} в AsyncStorage`);
+            
+            // Сортируем по дате создания (новые сверху)
+            clientRequests.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+            
+            resolve(clientRequests);
+            return;
+          } catch (error) {
+            console.error('Ошибка при чтении заявок из AsyncStorage:', error);
+            // Если ошибка, пробуем получить из SQLite
+          }
         }
-      );
+        
+        // Если не демо-режим или чтение из AsyncStorage не удалось, используем SQLite
+        // Инициализируем базу данных перед использованием
+        await getDatabase();
+        
+        db.transaction(
+          (tx) => {
+            tx.executeSql(
+              `SELECT r.*, (SELECT COUNT(*) FROM responses WHERE request_id = r.id) as response_count
+               FROM requests r 
+               WHERE r.client_id = ? 
+               ORDER BY r.created_at DESC`,
+              [clientId],
+              (_, { rows }) => {
+                const requests = [];
+                for (let i = 0; i < rows.length; i++) {
+                  requests.push(rows.item(i));
+                }
+                
+                console.log(`Found ${requests.length} requests in database for client ${clientId}`);
+                
+                // Не добавляем тестовые данные, возвращаем только реальные заявки
+                resolve(requests);
+              },
+              (_, error) => {
+                console.error('SQL error in getClientRequests:', error);
+                reject(error);
+              }
+            );
+          },
+          (error) => {
+            console.error('Transaction error in getClientRequests:', error);
+            reject(error);
+          }
+        );
+      } catch (error) {
+        console.error('Exception in getClientRequests:', error);
+        reject(error);
+      }
     });
   },
 
   // Get open requests with filters (for lawyers to find work)
-  getOpenRequests: (filters = {}) => {
-    return new Promise((resolve, reject) => {
-      let query = `
-        SELECT r.*, u.username as client_name 
-        FROM requests r
-        JOIN users u ON r.client_id = u.id
-        WHERE r.status = 'open'
-      `;
-      
-      const queryParams = [];
-      
-      if (filters.law_area) {
-        query += ` AND r.law_area = ?`;
-        queryParams.push(filters.law_area);
-      }
-      
-      if (filters.price_range) {
-        query += ` AND r.price_range = ?`;
-        queryParams.push(filters.price_range);
-      }
-      
-      if (filters.maxExperienceRequired) {
-        query += ` AND (r.experience_required IS NULL OR r.experience_required <= ?)`;
-        queryParams.push(filters.maxExperienceRequired);
-      }
-      
-      query += ` ORDER BY r.created_at DESC`;
-      
-      db.transaction(
-        (tx) => {
-          tx.executeSql(
-            query,
-            queryParams,
-            (_, { rows }) => {
-              const requests = [];
-              for (let i = 0; i < rows.length; i++) {
-                requests.push(rows.item(i));
-              }
-              resolve(requests);
-            },
-            (_, error) => {
-              reject(error);
-            }
-          );
+  getOpenRequests: async (filters = {}) => {
+    return new Promise(async (resolve, reject) => {
+      try {
+        // Инициализируем базу данных перед использованием
+        await getDatabase();
+        
+        let query = `
+          SELECT r.*, u.username as client_name 
+          FROM requests r
+          JOIN users u ON r.client_id = u.id
+          WHERE r.status = 'open'
+        `;
+        
+        const queryParams = [];
+        
+        if (filters.law_area) {
+          query += ` AND r.law_area = ?`;
+          queryParams.push(filters.law_area);
         }
-      );
+        
+        if (filters.price_range) {
+          query += ` AND r.price_range = ?`;
+          queryParams.push(filters.price_range);
+        }
+        
+        if (filters.maxExperienceRequired) {
+          query += ` AND (r.experience_required IS NULL OR r.experience_required <= ?)`;
+          queryParams.push(filters.maxExperienceRequired);
+        }
+        
+        query += ` ORDER BY r.created_at DESC`;
+        
+        db.transaction(
+          (tx) => {
+            tx.executeSql(
+              query,
+              queryParams,
+              (_, { rows }) => {
+                const requests = [];
+                for (let i = 0; i < rows.length; i++) {
+                  requests.push(rows.item(i));
+                }
+                resolve(requests);
+              },
+              (_, error) => {
+                reject(error);
+              }
+            );
+          }
+        );
+      } catch (error) {
+        reject(error);
+      }
     });
   },
 
   // Get all available requests for lawyers (including demo data if needed)
-  getAvailableRequests: (lawyerId) => {
-    return new Promise((resolve, reject) => {
+  getAvailableRequests: async (lawyerId) => {
+    return new Promise(async (resolve, reject) => {
       try {
         console.log('Загружаем заявки из AsyncStorage...');
+        
+        // Инициализируем базу данных перед использованием
+        await getDatabase();
         
         // Сначала попробуем загрузить сохраненные заявки из AsyncStorage
         AsyncStorage.getItem('mock_requests').then(savedRequests => {
@@ -387,7 +519,8 @@ export const RequestService = {
           status: "open",
           created_at: new Date(Date.now() - 72 * 60 * 60 * 1000).toISOString(),
           updated_at: new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString(),
-          responses: testResponses,
+          // Фильтруем отклики - показываем только те, что не отклонены (status != 'rejected')
+          responses: testResponses.filter(response => response.status !== 'rejected'),
           response_count: testResponses.length,
           experience_required: 3,
           isUrgent: requestId % 2 === 0,
@@ -500,54 +633,101 @@ export const RequestService = {
   // Update response status (accept/reject by client)
   updateResponseStatus: (responseId, status) => {
     return new Promise((resolve, reject) => {
-      db.transaction(
-        (tx) => {
-          tx.executeSql(
-            `UPDATE responses SET status = ? WHERE id = ?`,
-            [status, responseId],
-            (_, { rowsAffected }) => {
-              if (rowsAffected > 0) {
-                // Add to history and update request status if accepted
-                if (status === 'accepted') {
-                  tx.executeSql(
-                    `UPDATE requests r
-                     SET r.status = 'in_progress'
-                     WHERE r.id = (SELECT request_id FROM responses WHERE id = ?)`,
-                    [responseId],
-                    () => {
-                      tx.executeSql(
-                        `INSERT INTO history 
-                         (client_id, lawyer_id, request_id, interaction_type, details)
-                         SELECT r.client_id, resp.lawyer_id, r.id, 'accepted', 'Client accepted lawyer response'
-                         FROM responses resp
-                         JOIN requests r ON resp.request_id = r.id
-                         WHERE resp.id = ?`,
-                        [responseId],
-                        () => {
-                          resolve('Response updated successfully');
-                        },
-                        (_, error) => {
-                          reject(error);
-                        }
-                      );
-                    },
-                    (_, error) => {
-                      reject(error);
-                    }
-                  );
-                } else {
-                  resolve('Response updated successfully');
-                }
-              } else {
-                reject('Failed to update response');
-              }
-            },
-            (_, error) => {
-              reject(error);
-            }
-          );
+      try {
+        console.log(`Обновление статуса отклика ID: ${responseId} на "${status}"`);
+        
+        // Проверяем, если это тестовая база - обновляем тестовые данные
+        const isDemoMode = true; // Используем тестовый режим для демо
+        
+        if (isDemoMode) {
+          // Эмулируем успешное обновление
+          setTimeout(() => {
+            console.log(`Статус отклика обновлен на "${status}"`);
+            resolve('Response updated successfully');
+          }, 300);
+          return;
         }
-      );
+        
+        // Если это не демо режим, используем реальную БД
+        db.transaction(
+          (tx) => {
+            tx.executeSql(
+              `UPDATE responses SET status = ? WHERE id = ?`,
+              [status, responseId],
+              (_, { rowsAffected }) => {
+                if (rowsAffected > 0) {
+                  // Add to history and update request status if accepted
+                  if (status === 'accepted') {
+                    tx.executeSql(
+                      `UPDATE requests r
+                       SET r.status = 'in_progress'
+                       WHERE r.id = (SELECT request_id FROM responses WHERE id = ?)`,
+                      [responseId],
+                      () => {
+                        tx.executeSql(
+                          `INSERT INTO history 
+                           (client_id, lawyer_id, request_id, interaction_type, details)
+                           SELECT r.client_id, resp.lawyer_id, r.id, 'accepted', 'Client accepted lawyer response'
+                           FROM responses resp
+                           JOIN requests r ON resp.request_id = r.id
+                           WHERE resp.id = ?`,
+                          [responseId],
+                          () => {
+                            resolve('Response updated successfully');
+                          },
+                          (_, error) => {
+                            reject(error);
+                          }
+                        );
+                      },
+                      (_, error) => {
+                        reject(error);
+                      }
+                    );
+                  } else {
+                    resolve('Response updated successfully');
+                  }
+                } else {
+                  reject('Failed to update response');
+                }
+              },
+              (_, error) => {
+                reject(error);
+              }
+            );
+          }
+        );
+      } catch (error) {
+        console.error('Error updating response status:', error);
+        reject(error);
+      }
     });
-  }
+  },
+
+  // Инициализация демо-данных
+  initDemoData: async () => {
+    try {
+      console.log('Initializing demo data for requests...');
+      
+      // Проверяем наличие тестовых заявок в AsyncStorage
+      const savedRequests = await AsyncStorage.getItem('mock_requests');
+      
+      if (!savedRequests) {
+        console.log('No mock requests found, generating new ones...');
+        // Генерируем новые тестовые заявки
+        const mockRequests = RequestService.generateMockRequests();
+        
+        // Сохраняем в AsyncStorage
+        await AsyncStorage.setItem('mock_requests', JSON.stringify(mockRequests));
+        console.log(`Saved ${mockRequests.length} mock requests to AsyncStorage`);
+      } else {
+        console.log('Mock requests already exist in AsyncStorage');
+      }
+      
+      return true;
+    } catch (error) {
+      console.error('Error initializing demo data:', error);
+      return false;
+    }
+  },
 }; 

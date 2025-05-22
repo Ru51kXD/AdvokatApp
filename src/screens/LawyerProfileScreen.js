@@ -79,7 +79,7 @@ const LawyerProfileScreen = ({ route, navigation }) => {
             },
             { 
               text: "Войти", 
-              onPress: () => navigation.navigate('LoginScreen')
+              onPress: () => navigation.navigate('Login')
             }
           ]
         );

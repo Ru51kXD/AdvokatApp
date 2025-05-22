@@ -33,11 +33,10 @@ const validationSchema = Yup.object().shape({
 });
 
 const RequestScreen = ({ route, navigation }) => {
-  const { user } = useAuth();
+  const { lawyerId } = route.params || {};
+  const { authState } = useAuth();
+  const user = authState.user;
   const [isLoading, setIsLoading] = useState(false);
-  
-  // If there's a lawyerId in route params, we're creating a request for a specific lawyer
-  const lawyerId = route.params?.lawyerId;
 
   // Check if user is logged in when component mounts
   useEffect(() => {
@@ -60,14 +59,7 @@ const RequestScreen = ({ route, navigation }) => {
 
   const handleSubmit = async (values) => {
     if (!user) {
-      Alert.alert(
-        'Требуется авторизация',
-        'Пожалуйста, войдите в систему для создания заявки.',
-        [
-          { text: 'Отмена', onPress: () => navigation.goBack() },
-          { text: 'Войти', onPress: () => navigation.navigate('Login') }
-        ]
-      );
+      navigation.navigate('Login');
       return;
     }
     
@@ -83,7 +75,7 @@ const RequestScreen = ({ route, navigation }) => {
         lawyer_id: lawyerId, // Может быть undefined, если это общая заявка
       };
       
-      const requestId = await RequestService.createRequest(user.id, requestData);
+      const createdRequest = await RequestService.createRequest(user.id, requestData);
       
       Alert.alert(
         'Успешно!',
@@ -95,8 +87,14 @@ const RequestScreen = ({ route, navigation }) => {
               // Если это была заявка для конкретного юриста, вернуться на экран юриста
               navigation.goBack();
             } else {
-              // Иначе перейти на экран со списком заявок
-              navigation.navigate('RequestsTab');
+              // Иначе перейти на экран со списком заявок, используя reset для полной перезагрузки стека
+              navigation.reset({
+                index: 0,
+                routes: [{ name: 'ClientRequests' }],
+              });
+              
+              // Или можно перейти на детальное представление новой заявки
+              // navigation.navigate('RequestDetail', { requestId: createdRequest.id });
             }
           }
         }]

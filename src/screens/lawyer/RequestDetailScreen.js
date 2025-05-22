@@ -24,7 +24,8 @@ import { LawyerService } from '../../services/LawyerService';
 
 const LawyerRequestDetailScreen = ({ route, navigation }) => {
   const { requestId } = route.params;
-  const { user } = useAuth();
+  const { authState } = useAuth();
+  const user = authState.user;
   
   const [request, setRequest] = useState(null);
   const [loading, setLoading] = useState(true);

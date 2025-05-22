@@ -23,7 +23,8 @@ import { RequestService } from '../../services/RequestService';
 import { useAuth } from '../../contexts/AuthContext';
 
 const LawyerRequestsScreen = ({ navigation }) => {
-  const { user } = useAuth();
+  const { authState } = useAuth();
+  const user = authState.user;
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);

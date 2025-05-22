@@ -21,7 +21,8 @@ import { useAuth } from '../../contexts/AuthContext';
 
 const RequestDetailScreen = ({ route, navigation }) => {
   const { requestId } = route.params;
-  const { user } = useAuth();
+  const { authState } = useAuth();
+  const user = authState.user;
   
   const [request, setRequest] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -87,13 +88,32 @@ const RequestDetailScreen = ({ route, navigation }) => {
   const handleRejectResponse = async (responseId) => {
     try {
       await RequestService.updateResponseStatus(responseId, 'rejected');
+      
+      // Удаляем отклик из текущего списка откликов
+      setRequest(prevRequest => {
+        if (!prevRequest || !prevRequest.responses) return prevRequest;
+        
+        // Создаем новый массив откликов без отклоненного
+        const updatedResponses = prevRequest.responses.filter(
+          response => response.id !== responseId
+        );
+        
+        // Создаем обновленную заявку
+        return {
+          ...prevRequest,
+          responses: updatedResponses,
+          response_count: updatedResponses.length
+        };
+      });
+      
       Alert.alert(
         'Успешно',
         'Вы отклонили предложение юриста.',
         [{ text: 'OK' }]
       );
-      // Обновляем данные после отклонения
-      fetchRequestDetails();
+      
+      // Не обновляем данные через fetchRequestDetails, так как уже обновили локально
+      // fetchRequestDetails();
     } catch (err) {
       Alert.alert(
         'Ошибка',
