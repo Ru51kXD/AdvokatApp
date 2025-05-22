@@ -162,6 +162,18 @@ const LawyerProfileScreen = ({ navigation }) => {
     }));
   };
 
+  const handlePrivacyAndSecurity = () => {
+    navigation.navigate('PrivacyAndSecurity');
+  };
+  
+  const handleBankDetails = () => {
+    navigation.navigate('BankDetails');
+  };
+  
+  const handleSupport = () => {
+    navigation.navigate('Support');
+  };
+
   if (loading && !profileData) {
     return (
       <View style={styles.loadingContainer}>
@@ -407,7 +419,7 @@ const LawyerProfileScreen = ({ navigation }) => {
           
           <TouchableOpacity 
             style={styles.settingButton}
-            onPress={() => Alert.alert('Информация', 'Функция в разработке')}
+            onPress={handlePrivacyAndSecurity}
           >
             <View style={styles.settingButtonContent}>
               <Ionicons name="shield-checkmark-outline" size={22} color={COLORS.text} />
@@ -418,7 +430,7 @@ const LawyerProfileScreen = ({ navigation }) => {
           
           <TouchableOpacity 
             style={styles.settingButton}
-            onPress={() => Alert.alert('Информация', 'Функция в разработке')}
+            onPress={handleBankDetails}
           >
             <View style={styles.settingButtonContent}>
               <Ionicons name="cash-outline" size={22} color={COLORS.text} />
@@ -429,7 +441,7 @@ const LawyerProfileScreen = ({ navigation }) => {
           
           <TouchableOpacity 
             style={styles.settingButton}
-            onPress={() => Alert.alert('Информация', 'Функция в разработке')}
+            onPress={handleSupport}
           >
             <View style={styles.settingButtonContent}>
               <Ionicons name="help-circle-outline" size={22} color={COLORS.text} />

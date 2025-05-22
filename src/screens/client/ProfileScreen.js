@@ -57,6 +57,14 @@ const ClientProfileScreen = ({ navigation }) => {
     setNotificationsEnabled(prev => !prev);
   };
 
+  const handleSupport = () => {
+    navigation.navigate('Support');
+  };
+
+  const handlePrivacyAndSecurity = () => {
+    navigation.navigate('PrivacyAndSecurity');
+  };
+
   const navigateToAdminPanel = () => {
     navigation.navigate('AdminScreen');
   };
@@ -126,10 +134,18 @@ const ClientProfileScreen = ({ navigation }) => {
             <Ionicons name="chevron-forward" size={20} color={COLORS.grey} />
           </TouchableOpacity>
           
-          <TouchableOpacity style={styles.settingItem} onPress={() => {}}>
+          <TouchableOpacity style={styles.settingItem} onPress={handleSupport}>
             <View style={styles.settingLeft}>
               <Ionicons name="help-circle-outline" size={20} color={COLORS.textSecondary} />
               <Text style={styles.settingText}>Помощь и поддержка</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={COLORS.grey} />
+          </TouchableOpacity>
+          
+          <TouchableOpacity style={styles.settingItem} onPress={handlePrivacyAndSecurity}>
+            <View style={styles.settingLeft}>
+              <Ionicons name="shield-checkmark-outline" size={20} color={COLORS.textSecondary} />
+              <Text style={styles.settingText}>Приватность и безопасность</Text>
             </View>
             <Ionicons name="chevron-forward" size={20} color={COLORS.grey} />
           </TouchableOpacity>

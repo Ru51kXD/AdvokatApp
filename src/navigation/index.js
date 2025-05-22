@@ -31,6 +31,11 @@ import NewChatScreen from '../screens/chat/NewChatScreen';
 // Help screen
 import HelpScreen from '../screens/HelpScreen';
 
+// New screens
+import PrivacyAndSecurityScreen from '../screens/PrivacyAndSecurityScreen';
+import BankDetailsScreen from '../screens/BankDetailsScreen';
+import SupportScreen from '../screens/SupportScreen';
+
 // Admin screen placeholder
 const AdminScreen = ({ route }) => (
   <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
@@ -112,6 +117,16 @@ const ClientProfileStack = () => (
       name="Profile" 
       component={ClientProfileScreen} 
       options={{ title: 'Профиль' }} 
+    />
+    <Stack.Screen 
+      name="PrivacyAndSecurity" 
+      component={PrivacyAndSecurityScreen} 
+      options={{ headerShown: false }} 
+    />
+    <Stack.Screen 
+      name="Support" 
+      component={SupportScreen} 
+      options={{ headerShown: false }} 
     />
     <Stack.Screen 
       name="AdminScreen" 
@@ -198,6 +213,26 @@ const LawyerProfileStack = () => (
       name="Profile" 
       component={LawyerProfileScreen} 
       options={{ title: 'Профиль' }} 
+    />
+    <Stack.Screen 
+      name="PrivacyAndSecurity" 
+      component={PrivacyAndSecurityScreen} 
+      options={{ headerShown: false }} 
+    />
+    <Stack.Screen 
+      name="BankDetails" 
+      component={BankDetailsScreen} 
+      options={{ headerShown: false }} 
+    />
+    <Stack.Screen 
+      name="Support" 
+      component={SupportScreen} 
+      options={{ headerShown: false }} 
+    />
+    <Stack.Screen 
+      name="AdminScreen" 
+      component={AdminScreen} 
+      options={{ title: 'Панель администратора' }} 
     />
   </Stack.Navigator>
 );
