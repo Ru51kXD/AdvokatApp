@@ -20,33 +20,70 @@ import ChatService from '../../services/ChatService';
 import ChatMessage from '../../components/ChatMessage';
 
 const ChatScreen = ({ route, navigation }) => {
-  const { conversationId, title } = route.params;
-  const { user } = useAuth();
+  const { conversationId, title, guestId } = route.params;
+  const { authState } = useAuth();
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [conversation, setConversation] = useState(null);
+  const [sending, setSending] = useState(false);
   const flatListRef = useRef();
+
+  // Определяем ID пользователя (авторизованный пользователь или гость)
+  const userId = guestId || (authState.user ? authState.user.id : null);
+  const isGuest = Boolean(guestId);
+
+  console.log('ChatScreen: Initialized with', { 
+    conversationId, 
+    title,
+    userId,
+    isGuest,
+    authUser: authState.user ? { id: authState.user.id, type: authState.user.user_type } : null 
+  });
+
+  // Проверяем ID пользователя
+  useEffect(() => {
+    if (!userId) {
+      setError('Не удалось определить ID пользователя. Пожалуйста, войдите в систему или перезапустите чат.');
+      setLoading(false);
+    }
+  }, [userId]);
 
   // Загрузка сообщений
   const loadMessages = useCallback(async () => {
     try {
+      if (!conversationId) {
+        setError('ID беседы не указан');
+        setLoading(false);
+        return;
+      }
+
+      console.log('ChatScreen: Loading messages for conversation', conversationId);
       setLoading(true);
       setError(null);
       const result = await ChatService.getMessages(conversationId);
+      console.log('ChatScreen: Loaded messages', { 
+        count: result.messages.length,
+        conversation: result.conversation?.id
+      });
+      
       setMessages(result.messages);
       setConversation(result.conversation);
       
-      // Отмечаем сообщения как прочитанные
-      await ChatService.markMessagesAsRead(conversationId, user.id);
+      // Отмечаем сообщения как прочитанные только для авторизованных пользователей
+      if (authState.user && !isGuest) {
+        await ChatService.markMessagesAsRead(conversationId, authState.user.id);
+      } else {
+        console.log('ChatScreen: Cannot mark messages as read - user is guest or not authenticated');
+      }
     } catch (err) {
       console.error('Error loading messages:', err);
-      setError('Не удалось загрузить сообщения');
+      setError('Не удалось загрузить сообщения: ' + err.message);
     } finally {
       setLoading(false);
     }
-  }, [conversationId, user]);
+  }, [conversationId, authState.user, isGuest]);
 
   // Загружаем сообщения при входе на экран
   useFocusEffect(
@@ -69,17 +106,47 @@ const ChatScreen = ({ route, navigation }) => {
     }
   }, [messages]);
 
+  // Обновляем заголовок экрана, когда загружены данные разговора
+  useEffect(() => {
+    if (conversation) {
+      // Получаем более точное имя из данных разговора
+      const updatedTitle = isGuest ? conversation.lawyer_name || title : title;
+      
+      // Обновляем заголовок в навигации
+      navigation.setOptions({
+        title: updatedTitle
+      });
+    }
+  }, [conversation, navigation, title, isGuest]);
+
   // Отправка сообщения
   const handleSendMessage = async () => {
-    if (!newMessage.trim() || !conversation) return;
+    if (!newMessage.trim() || !conversation) {
+      console.log('ChatScreen: Cannot send message', { 
+        hasMessage: Boolean(newMessage.trim()), 
+        hasConversation: Boolean(conversation)
+      });
+      return;
+    }
     
     try {
-      const receiverId = user.id === conversation.client_id 
+      console.log('ChatScreen: Sending message as', isGuest ? 'guest' : 'authenticated user');
+      setSending(true);
+      
+      if (!userId) {
+        console.error('ChatScreen: Cannot send message - no user ID available');
+        alert('Необходимо войти в систему или перезапустить чат');
+        return;
+      }
+      
+      const receiverId = isGuest || (authState.user && authState.user.id === conversation.client_id)
         ? conversation.lawyer_id 
         : conversation.client_id;
       
+      console.log('ChatScreen: Sending message to', receiverId, 'from', userId);
+      
       await ChatService.sendMessage(
-        user.id,
+        userId,
         receiverId,
         newMessage.trim(),
         conversation.request_id
@@ -89,13 +156,15 @@ const ChatScreen = ({ route, navigation }) => {
       loadMessages();
     } catch (err) {
       console.error('Error sending message:', err);
-      alert('Не удалось отправить сообщение');
+      alert('Не удалось отправить сообщение: ' + err.message);
+    } finally {
+      setSending(false);
     }
   };
 
   // Рендер отдельного сообщения
   const renderMessage = ({ item }) => {
-    const isOwn = item.sender_id === user.id;
+    const isOwn = item.sender_id === userId;
     return <ChatMessage message={item} isOwn={isOwn} />;
   };
 
@@ -141,20 +210,25 @@ const ChatScreen = ({ route, navigation }) => {
               value={newMessage}
               onChangeText={setNewMessage}
               multiline
+              editable={!sending}
             />
             <TouchableOpacity
               style={[
                 styles.sendButton,
-                !newMessage.trim() && styles.disabledButton
+                (!newMessage.trim() || sending) && styles.disabledButton
               ]}
               onPress={handleSendMessage}
-              disabled={!newMessage.trim()}
+              disabled={!newMessage.trim() || sending}
             >
-              <Ionicons 
-                name="send" 
-                size={20} 
-                color={newMessage.trim() ? COLORS.white : COLORS.lightGrey} 
-              />
+              {sending ? (
+                <ActivityIndicator size="small" color={COLORS.white} />
+              ) : (
+                <Ionicons 
+                  name="send" 
+                  size={20} 
+                  color={newMessage.trim() ? COLORS.white : COLORS.lightGrey} 
+                />
+              )}
             </TouchableOpacity>
           </View>
         </KeyboardAvoidingView>

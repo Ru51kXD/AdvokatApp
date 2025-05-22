@@ -17,7 +17,9 @@ import ChatService from '../../services/ChatService';
 import ImageService from '../../services/ImageService';
 
 const NewChatScreen = ({ navigation }) => {
-  const { user } = useAuth();
+  const { authState } = useAuth();
+  const user = authState.user || {}; // Safe access to user object
+  
   const [searchQuery, setSearchQuery] = useState('');
   const [users, setUsers] = useState([]);
   const [filteredUsers, setFilteredUsers] = useState([]);
@@ -30,19 +32,27 @@ const NewChatScreen = ({ navigation }) => {
       try {
         setLoading(true);
         setError(null);
+        
+        // Проверка авторизации
+        if (!authState.isAuthenticated || !user.id) {
+          setError('Необходимо войти в систему для доступа к чату');
+          setLoading(false);
+          return;
+        }
+        
         const data = await ChatService.getPotentialChatPartners(user.id);
         setUsers(data);
         setFilteredUsers(data);
       } catch (err) {
         console.error('Error loading potential chat partners:', err);
-        setError('Не удалось загрузить список пользователей');
+        setError('Не удалось загрузить список пользователей: ' + (err.message || 'Неизвестная ошибка'));
       } finally {
         setLoading(false);
       }
     };
 
     fetchUsers();
-  }, [user]);
+  }, [authState, user.id]);
 
   // Фильтрация пользователей по поисковому запросу
   useEffect(() => {
@@ -62,28 +72,40 @@ const NewChatScreen = ({ navigation }) => {
   // Начать беседу с выбранным пользователем
   const handleSelectUser = async (selectedUser) => {
     try {
+      // Проверка авторизации
+      if (!authState.isAuthenticated || !user.id) {
+        alert('Необходимо войти в систему для отправки сообщений');
+        return;
+      }
+      
       // Создаем первое сообщение и беседу
       const message = "Здравствуйте! Хотел бы обсудить с вами юридический вопрос.";
       const result = await ChatService.sendMessage(user.id, selectedUser.id, message);
       
+      // Используем полное имя адвоката, если доступно
+      const displayName = selectedUser.name || selectedUser.username;
+      
       // Переходим к экрану чата
       navigation.replace('ChatScreen', {
         conversationId: result.conversationId,
-        title: selectedUser.username
+        title: displayName
       });
     } catch (error) {
       console.error('Error starting conversation:', error);
-      alert('Не удалось начать беседу');
+      alert('Не удалось начать беседу: ' + (error.message || 'Неизвестная ошибка'));
     }
   };
 
   // Рендер элемента пользователя
   const renderUserItem = ({ item }) => {
     // Цвет аватара в зависимости от типа пользователя
-    const color = user.userType === 'client'
+    const color = user.user_type === 'client'
       ? ImageService.getLawyerAvatarColor(item.id)
       : ImageService.getClientAvatarColor(item.id);
-    const initials = ImageService.getInitials(item.username);
+    const initials = ImageService.getInitials(item.name || item.username);
+    
+    // Отображаемое имя пользователя (с приоритетом полного имени)
+    const displayName = item.name || item.username;
     
     return (
       <TouchableOpacity 
@@ -95,9 +117,9 @@ const NewChatScreen = ({ navigation }) => {
         </View>
         
         <View style={styles.userInfo}>
-          <Text style={styles.userName}>{item.username}</Text>
+          <Text style={styles.userName}>{displayName}</Text>
           
-          {user.userType === 'client' && item.specialization ? (
+          {user.user_type === 'client' && item.specialization ? (
             <View style={styles.detailRow}>
               <Text style={styles.specialization}>{item.specialization}</Text>
               {item.experience && (
@@ -106,11 +128,11 @@ const NewChatScreen = ({ navigation }) => {
             </View>
           ) : null}
           
-          {user.userType === 'client' && item.city ? (
+          {user.user_type === 'client' && item.city ? (
             <Text style={styles.city}>{item.city}</Text>
           ) : null}
           
-          {user.userType === 'lawyer' && item.request_count > 0 ? (
+          {user.user_type === 'lawyer' && item.request_count > 0 ? (
             <Text style={styles.requestCount}>{item.request_count} активных заявок</Text>
           ) : null}
         </View>
@@ -151,8 +173,16 @@ const NewChatScreen = ({ navigation }) => {
       ) : error ? (
         <View style={styles.errorContainer}>
           <Text style={styles.errorText}>{error}</Text>
+          {!authState.isAuthenticated && (
+            <TouchableOpacity
+              style={styles.retryButton}
+              onPress={() => navigation.navigate('LoginScreen')}
+            >
+              <Text style={styles.retryText}>Войти</Text>
+            </TouchableOpacity>
+          )}
           <TouchableOpacity
-            style={styles.retryButton}
+            style={[styles.retryButton, { marginTop: 10 }]}
             onPress={() => navigation.goBack()}
           >
             <Text style={styles.retryText}>Назад</Text>

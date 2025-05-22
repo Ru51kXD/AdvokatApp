@@ -1,64 +1,69 @@
-import { db, initDatabase, getDatabase, executeQuery } from '../database/database';
+import { db, initDatabase, getDatabase, executeQuery, getLawyerByUserId, getUserById } from '../database/database';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export const LawyerService = {
   // Get lawyer profile by user ID
-  getLawyerProfile: (userId) => {
-    return new Promise((resolve, reject) => {
-      db.transaction(
-        (tx) => {
-          tx.executeSql(
-            `SELECT l.*, u.username, u.email, u.phone 
-             FROM lawyers l
-             JOIN users u ON l.user_id = u.id
-             WHERE l.user_id = ?`,
-            [userId],
-            (_, { rows }) => {
-              if (rows.length > 0) {
-                resolve(rows.item(0));
-              } else {
-                reject('Lawyer profile not found');
-              }
-            },
-            (_, error) => {
-              reject(error);
-            }
-          );
-        }
-      );
-    });
+  getLawyerProfile: async (userId) => {
+    try {
+      await initDatabase();
+      
+      // Get lawyer profile
+      const lawyer = await getLawyerByUserId(userId);
+      
+      if (!lawyer) {
+        throw new Error('Lawyer profile not found');
+      }
+      
+      // Get user data
+      const user = await getUserById(userId);
+      
+      if (!user) {
+        throw new Error('User not found');
+      }
+      
+      // Combine lawyer profile with user data
+      return {
+        ...lawyer,
+        username: user.username,
+        email: user.email,
+        phone: user.phone
+      };
+    } catch (error) {
+      console.error('Error in getLawyerProfile:', error);
+      throw error;
+    }
   },
 
   // Update lawyer profile
-  updateLawyerProfile: (userId, profileData) => {
-    const { specialization, experience, price_range, bio, city, address } = profileData;
-    
-    return new Promise((resolve, reject) => {
-      db.transaction(
-        (tx) => {
-          tx.executeSql(
-            `UPDATE lawyers 
-             SET specialization = ?, 
-                 experience = ?, 
-                 price_range = ?, 
-                 bio = ?, 
-                 city = ?, 
-                 address = ?
-             WHERE user_id = ?`,
-            [specialization, experience, price_range, bio, city, address, userId],
-            (_, { rowsAffected }) => {
-              if (rowsAffected > 0) {
-                resolve('Profile updated successfully');
-              } else {
-                reject('Failed to update profile');
-              }
-            },
-            (_, error) => {
-              reject(error);
-            }
-          );
-        }
-      );
-    });
+  updateLawyerProfile: async (userId, profileData) => {
+    try {
+      await initDatabase();
+      
+      // Get lawyers array
+      const lawyers = JSON.parse(await AsyncStorage.getItem('lawyers')) || [];
+      
+      // Find lawyer index
+      const lawyerIndex = lawyers.findIndex(l => l.user_id === userId);
+      
+      if (lawyerIndex === -1) {
+        throw new Error('Lawyer profile not found');
+      }
+      
+      // Update lawyer data
+      lawyers[lawyerIndex] = {
+        ...lawyers[lawyerIndex],
+        ...profileData,
+        updated_at: new Date().toISOString()
+      };
+      
+      // Save updated lawyers array
+      await AsyncStorage.setItem('lawyers', JSON.stringify(lawyers));
+      
+      return { success: true };
+    } catch (error) {
+      console.error('Error in updateLawyerProfile:', error);
+      throw error;
+    }
   },
 
   // Get all lawyers with filters
@@ -554,4 +559,6 @@ export const LawyerService = {
     }
   }
 }; 
+ 
+ 
  

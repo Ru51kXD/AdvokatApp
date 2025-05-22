@@ -28,16 +28,31 @@ const RequestDetailScreen = ({ route, navigation }) => {
   const [error, setError] = useState(null);
 
   const fetchRequestDetails = useCallback(async () => {
-    if (!user || !requestId) return;
+    if (!requestId) {
+      console.log('Нет requestId, прерываю загрузку');
+      setError('Идентификатор заявки не указан');
+      setLoading(false);
+      return;
+    }
     
+    console.log(`Начинаю загрузку заявки ID=${requestId}`);
     setLoading(true);
+    
     try {
-      const requestData = await RequestService.getRequestById(requestId, user.id, user.userType);
+      // Простой запрос без проверки авторизации
+      const requestData = await RequestService.getRequestById(requestId, user?.id, user?.userType);
+      
+      console.log('Получены данные заявки:', requestData.id, requestData.title);
+      
+      if (!requestData) {
+        throw new Error('Данные заявки не получены');
+      }
+      
       setRequest(requestData);
       setError(null);
     } catch (err) {
-      console.error('Error fetching request details:', err);
-      setError('Не удалось загрузить детали заявки.');
+      console.error('Ошибка при загрузке деталей заявки:', err);
+      setError('Не удалось загрузить детали заявки. Попробуйте еще раз.');
     } finally {
       setLoading(false);
     }
@@ -181,13 +196,13 @@ const RequestDetailScreen = ({ route, navigation }) => {
             
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Область права:</Text>
-              <Text style={styles.detailValue}>{request.law_area}</Text>
+              <Text style={styles.detailValue}>{request.law_area_display || request.law_area}</Text>
             </View>
             
             {request.price_range && (
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>Бюджет:</Text>
-                <Text style={styles.detailValue}>{request.price_range}</Text>
+                <Text style={styles.detailValue}>{request.price_range_display || request.price_range}</Text>
               </View>
             )}
             

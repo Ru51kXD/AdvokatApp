@@ -1,28 +1,19 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { 
-  View, 
-  StyleSheet, 
-  Text, 
-  ScrollView, 
-  TouchableOpacity,
-  Image,
-  Alert,
-  Switch,
-  ActivityIndicator
-} from 'react-native';
+import {   View,   StyleSheet,   Text,   ScrollView,   TouchableOpacity,  Image,  Alert,  Switch,  ActivityIndicator,  Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 
-import { COLORS, KAZAKHSTAN_CITIES, LAW_AREAS } from '../../constants';
+import { COLORS, KAZAKHSTAN_CITIES, LAW_AREAS, PRICE_RANGES } from '../../constants';
 import Button from '../../components/Button';
 import Input from '../../components/Input';
 import Picker from '../../components/Picker';
 import { useAuth } from '../../contexts/AuthContext';
 import { LawyerService } from '../../services/LawyerService';
+import { RequestService } from '../../services/RequestService';
 
 const LawyerProfileScreen = ({ navigation }) => {
-  const { user, logout } = useAuth();
+  const { authState, signOut } = useAuth();
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [loading, setLoading] = useState(true);
   const [profileData, setProfileData] = useState(null);
@@ -35,29 +26,76 @@ const LawyerProfileScreen = ({ navigation }) => {
     city: '',
     address: '',
   });
+  
+  // Stats data for dashboard
+  const [stats, setStats] = useState({
+    totalClients: 0,
+    activeRequests: 0,
+    totalEarnings: 0,
+    responseRate: 0,
+    reviewCount: 0
+  });
 
   const loadProfile = useCallback(async () => {
-    if (!user) return;
+    if (!authState.user) return;
     
     setLoading(true);
     try {
-      const lawyerProfile = await LawyerService.getLawyerProfile(user.id);
-      setProfileData(lawyerProfile);
-      setFormData({
-        specialization: lawyerProfile.specialization || '',
-        experience: lawyerProfile.experience ? lawyerProfile.experience.toString() : '',
-        price_range: lawyerProfile.price_range || '',
-        bio: lawyerProfile.bio || '',
-        city: lawyerProfile.city || '',
-        address: lawyerProfile.address || '',
-      });
+      const lawyerProfile = await LawyerService.getLawyerProfile(authState.user.id);
+      
+      if (lawyerProfile) {
+        setProfileData(lawyerProfile);
+        setFormData({
+          specialization: lawyerProfile.specialization || '',
+          experience: lawyerProfile.experience ? lawyerProfile.experience.toString() : '',
+          price_range: lawyerProfile.price_range || '',
+          bio: lawyerProfile.bio || '',
+          city: lawyerProfile.city || '',
+          address: lawyerProfile.address || '',
+        });
+        
+        // Calculate some stats (using demo data for now since we don't have real data)
+        // In a real app, this would come from backend APIs
+        setStats({
+          totalClients: Math.floor(Math.random() * 20) + 5, // 5-25 clients
+          activeRequests: Math.floor(Math.random() * 8) + 1, // 1-8 active requests
+          totalEarnings: Math.floor(Math.random() * 500000) + 100000, // 100,000-600,000 tenge
+          responseRate: Math.floor(Math.random() * 30) + 70, // 70-100% response rate
+          reviewCount: Math.floor(Math.random() * 15) + 1, // 1-15 reviews
+        });
+      } else {
+        // If no lawyer profile is found, try to get it from registration data
+        const { getLawyerByUserId } = await import('../../database/database');
+        const lawyer = await getLawyerByUserId(authState.user.id);
+        
+        if (lawyer) {
+          setProfileData(lawyer);
+          setFormData({
+            specialization: lawyer.specialization || '',
+            experience: lawyer.experience ? lawyer.experience.toString() : '',
+            price_range: lawyer.price_range || '',
+            bio: lawyer.bio || '',
+            city: lawyer.city || '',
+            address: lawyer.address || '',
+          });
+          
+          // Demo stats
+          setStats({
+            totalClients: Math.floor(Math.random() * 20) + 5,
+            activeRequests: Math.floor(Math.random() * 8) + 1,
+            totalEarnings: Math.floor(Math.random() * 500000) + 100000,
+            responseRate: Math.floor(Math.random() * 30) + 70,
+            reviewCount: Math.floor(Math.random() * 15) + 1,
+          });
+        }
+      }
     } catch (err) {
       console.error('Error loading profile:', err);
       Alert.alert('Ошибка', 'Не удалось загрузить данные профиля.');
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [authState.user]);
 
   useFocusEffect(
     useCallback(() => {
@@ -74,7 +112,14 @@ const LawyerProfileScreen = ({ navigation }) => {
         { 
           text: 'Выйти', 
           onPress: async () => {
-            await logout();
+            const result = await signOut();
+            if (result.success) {
+              // Вместо использования navigation.reset, просто выходим
+              // Приложение автоматически переключится на AuthStack через AppNavigation
+              console.log('Выход из системы выполнен успешно');
+            } else {
+              Alert.alert('Ошибка', result.error || 'Не удалось выйти из аккаунта');
+            }
           },
           style: 'destructive'
         }
@@ -95,7 +140,7 @@ const LawyerProfileScreen = ({ navigation }) => {
     try {
       const experienceValue = formData.experience ? parseInt(formData.experience, 10) : 0;
       
-      await LawyerService.updateLawyerProfile(user.id, {
+      await LawyerService.updateLawyerProfile(authState.user.id, {
         ...formData,
         experience: experienceValue,
       });
@@ -126,6 +171,14 @@ const LawyerProfileScreen = ({ navigation }) => {
     );
   }
 
+  // Format the earnings with currency symbol
+  const formattedEarnings = new Intl.NumberFormat('kk-KZ', {
+    style: 'currency',
+    currency: 'KZT',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0
+  }).format(stats.totalEarnings);
+
   return (
     <SafeAreaView edges={['bottom']} style={styles.container}>
       <ScrollView contentContainerStyle={styles.content}>
@@ -142,8 +195,10 @@ const LawyerProfileScreen = ({ navigation }) => {
           </View>
           
           <View style={styles.profileInfo}>
-            <Text style={styles.name}>{user?.username || 'Адвокат'}</Text>
-            <Text style={styles.userType}>Адвокат</Text>
+            <Text style={styles.name}>{authState.user?.username || 'Адвокат'}</Text>
+            <Text style={styles.userType}>
+              {profileData?.specialization || 'Адвокат'}
+            </Text>
             {profileData?.rating > 0 && (
               <View style={styles.ratingContainer}>
                 <Text style={styles.ratingText}>
@@ -165,6 +220,63 @@ const LawyerProfileScreen = ({ navigation }) => {
             />
           </TouchableOpacity>
         </View>
+
+        {/* Dashboard статистики */}
+        {!isEditing && (
+          <View style={styles.dashboardSection}>
+            <Text style={styles.sectionTitle}>Панель адвоката</Text>
+            
+            <View style={styles.statsRow}>
+              <View style={styles.statCard}>
+                <Text style={styles.statValue}>{stats.totalClients}</Text>
+                <Text style={styles.statLabel}>Клиентов</Text>
+              </View>
+              <View style={styles.statCard}>
+                <Text style={styles.statValue}>{stats.activeRequests}</Text>
+                <Text style={styles.statLabel}>Активных заявок</Text>
+              </View>
+              <View style={styles.statCard}>
+                <Text style={styles.statValue}>{stats.reviewCount}</Text>
+                <Text style={styles.statLabel}>Отзывов</Text>
+              </View>
+            </View>
+            
+            <View style={styles.earningsCard}>
+              <View>
+                <Text style={styles.earningsLabel}>Общий заработок</Text>
+                <Text style={styles.earningsValue}>{formattedEarnings}</Text>
+              </View>
+              <View style={styles.responseRateContainer}>
+                <Text style={styles.responseRateLabel}>Скорость отклика</Text>
+                <View style={styles.responseRateBar}>
+                  <View style={[styles.responseRateFill, { width: `${stats.responseRate}%` }]} />
+                </View>
+                <Text style={styles.responseRateValue}>{stats.responseRate}%</Text>
+              </View>
+            </View>
+            
+            <View style={styles.quickActionsContainer}>
+              <TouchableOpacity 
+                style={styles.quickActionButton}
+                onPress={() => navigation.navigate('RequestsTab')}
+              >
+                <Ionicons name="briefcase-outline" size={24} color={COLORS.primary} />
+                <Text style={styles.quickActionText}>Заявки</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={styles.quickActionButton}
+                onPress={() => navigation.navigate('ChatsTab')}
+              >
+                <Ionicons name="chatbubbles-outline" size={24} color={COLORS.primary} />
+                <Text style={styles.quickActionText}>Чаты</Text>
+                <View style={styles.notificationBadge}>
+                  <Text style={styles.notificationText}>3</Text>
+                </View>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
 
         {/* Форма редактирования */}
         {isEditing ? (
@@ -190,7 +302,7 @@ const LawyerProfileScreen = ({ navigation }) => {
             <Picker
               label="Стоимость услуг"
               placeholder="Выберите диапазон стоимости"
-              items={COLORS.PRICE_RANGES}
+              items={PRICE_RANGES}
               value={formData.price_range}
               onValueChange={(value) => handleInputChange('price_range', value)}
             />
@@ -231,148 +343,119 @@ const LawyerProfileScreen = ({ navigation }) => {
                 onPress={handleToggleEdit}
                 variant="outline"
                 style={styles.cancelButton}
-                disabled={loading}
               />
             </View>
           </View>
         ) : (
-          <>
-            {/* Профессиональная информация */}
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Профессиональная информация</Text>
-              
-              <View style={styles.infoItem}>
-                <Text style={styles.infoLabel}>Специализация:</Text>
-                <Text style={styles.infoText}>
-                  {profileData?.specialization || 'Не указана'}
-                </Text>
-              </View>
-              
-              <View style={styles.infoItem}>
-                <Text style={styles.infoLabel}>Опыт работы:</Text>
-                <Text style={styles.infoText}>
-                  {profileData?.experience 
-                    ? `${profileData.experience} ${getYearText(profileData.experience)}` 
-                    : 'Не указан'}
-                </Text>
-              </View>
-              
-              <View style={styles.infoItem}>
-                <Text style={styles.infoLabel}>Стоимость услуг:</Text>
-                <Text style={styles.infoText}>
-                  {profileData?.price_range || 'Не указана'}
-                </Text>
-              </View>
-              
-              <View style={styles.infoItem}>
-                <Text style={styles.infoLabel}>Город:</Text>
-                <Text style={styles.infoText}>
-                  {profileData?.city || 'Не указан'}
-                </Text>
-              </View>
-              
-              <View style={styles.infoItem}>
-                <Text style={styles.infoLabel}>Адрес:</Text>
-                <Text style={styles.infoText}>
-                  {profileData?.address || 'Не указан'}
-                </Text>
-              </View>
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Информация профиля</Text>
+            
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Специализация:</Text>
+              <Text style={styles.infoValue}>{profileData?.specialization || 'Не указана'}</Text>
             </View>
-
-            {/* О себе */}
+            
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Опыт работы:</Text>
+              <Text style={styles.infoValue}>
+                {profileData?.experience ? `${profileData.experience} ${getYearText(profileData.experience)}` : 'Не указан'}
+              </Text>
+            </View>
+            
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Стоимость услуг:</Text>
+              <Text style={styles.infoValue}>{profileData?.price_range || 'Не указана'}</Text>
+            </View>
+            
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Город:</Text>
+              <Text style={styles.infoValue}>{profileData?.city || 'Не указан'}</Text>
+            </View>
+            
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Адрес:</Text>
+              <Text style={styles.infoValue}>{profileData?.address || 'Не указан'}</Text>
+            </View>
+            
             {profileData?.bio && (
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>О себе</Text>
+              <View style={styles.bioContainer}>
+                <Text style={styles.bioLabel}>О себе:</Text>
                 <Text style={styles.bioText}>{profileData.bio}</Text>
               </View>
             )}
-
-            {/* Контактная информация */}
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Контактная информация</Text>
-              
-              <View style={styles.infoItem}>
-                <Ionicons name="mail-outline" size={20} color={COLORS.textSecondary} />
-                <Text style={styles.contactText}>{user?.email || 'Не указан'}</Text>
-              </View>
-              
-              <View style={styles.infoItem}>
-                <Ionicons name="call-outline" size={20} color={COLORS.textSecondary} />
-                <Text style={styles.contactText}>{user?.phone || 'Не указан'}</Text>
-              </View>
-            </View>
-
-            {/* Настройки */}
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Настройки</Text>
-              
-              <View style={styles.settingItem}>
-                <View style={styles.settingLeft}>
-                  <Ionicons name="notifications-outline" size={20} color={COLORS.textSecondary} />
-                  <Text style={styles.settingText}>Уведомления</Text>
-                </View>
-                <Switch
-                  value={notificationsEnabled}
-                  onValueChange={handleToggleNotifications}
-                  trackColor={{ false: COLORS.lightGrey, true: COLORS.primary + '80' }}
-                  thumbColor={notificationsEnabled ? COLORS.primary : COLORS.grey}
-                />
-              </View>
-              
-              <TouchableOpacity style={styles.settingItem} onPress={() => {}}>
-                <View style={styles.settingLeft}>
-                  <Ionicons name="lock-closed-outline" size={20} color={COLORS.textSecondary} />
-                  <Text style={styles.settingText}>Изменить пароль</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={20} color={COLORS.grey} />
-              </TouchableOpacity>
-              
-              <TouchableOpacity style={styles.settingItem} onPress={() => {}}>
-                <View style={styles.settingLeft}>
-                  <Ionicons name="help-circle-outline" size={20} color={COLORS.textSecondary} />
-                  <Text style={styles.settingText}>Помощь и поддержка</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={20} color={COLORS.grey} />
-              </TouchableOpacity>
-            </View>
-
-            {/* Статистика */}
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Статистика</Text>
-              
-              <View style={styles.statsContainer}>
-                <View style={styles.statItem}>
-                  <Text style={styles.statValue}>0</Text>
-                  <Text style={styles.statLabel}>Откликов</Text>
-                </View>
-                <View style={styles.statItem}>
-                  <Text style={styles.statValue}>0</Text>
-                  <Text style={styles.statLabel}>В работе</Text>
-                </View>
-                <View style={styles.statItem}>
-                  <Text style={styles.statValue}>0</Text>
-                  <Text style={styles.statLabel}>Завершено</Text>
-                </View>
-              </View>
-            </View>
-          </>
+          </View>
         )}
 
-        {/* Кнопка выхода */}
-        <Button
-          title="Выйти из аккаунта"
-          onPress={handleLogout}
-          variant="outline"
-          style={styles.logoutButton}
-        />
-
-        <Text style={styles.version}>Версия приложения: 1.0.0</Text>
+        {/* Настройки */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Настройки</Text>
+          
+          <View style={styles.settingRow}>
+            <View>
+              <Text style={styles.settingLabel}>Уведомления</Text>
+              <Text style={styles.settingDescription}>
+                Получать уведомления о новых заявках и сообщениях
+              </Text>
+            </View>
+            <Switch
+              value={notificationsEnabled}
+              onValueChange={handleToggleNotifications}
+              trackColor={{ false: COLORS.lightGray, true: COLORS.primary }}
+              thumbColor={COLORS.white}
+            />
+          </View>
+          
+          <TouchableOpacity 
+            style={styles.settingButton}
+            onPress={() => Alert.alert('Информация', 'Функция в разработке')}
+          >
+            <View style={styles.settingButtonContent}>
+              <Ionicons name="shield-checkmark-outline" size={22} color={COLORS.text} />
+              <Text style={styles.settingButtonText}>Приватность и безопасность</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={22} color={COLORS.text} />
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={styles.settingButton}
+            onPress={() => Alert.alert('Информация', 'Функция в разработке')}
+          >
+            <View style={styles.settingButtonContent}>
+              <Ionicons name="cash-outline" size={22} color={COLORS.text} />
+              <Text style={styles.settingButtonText}>Банковские реквизиты</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={22} color={COLORS.text} />
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={styles.settingButton}
+            onPress={() => Alert.alert('Информация', 'Функция в разработке')}
+          >
+            <View style={styles.settingButtonContent}>
+              <Ionicons name="help-circle-outline" size={22} color={COLORS.text} />
+              <Text style={styles.settingButtonText}>Поддержка</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={22} color={COLORS.text} />
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={[styles.settingButton, styles.logoutButton]}
+            onPress={handleLogout}
+          >
+            <View style={styles.settingButtonContent}>
+              <Ionicons name="log-out-outline" size={22} color={COLORS.error} />
+              <Text style={styles.logoutButtonText}>Выйти из аккаунта</Text>
+            </View>
+          </TouchableOpacity>
+        </View>
+        
+        <Text style={styles.versionText}>Версия приложения: 1.0.0</Text>
       </ScrollView>
     </SafeAreaView>
   );
 };
 
-// Функция для корректного склонения слова "год" в зависимости от числа
+// Helper function to get correct year text in Russian
 const getYearText = (years) => {
   if (years === 1) return 'год';
   if (years > 1 && years < 5) return 'года';
@@ -401,14 +484,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: COLORS.white,
-    borderRadius: 8,
+    borderRadius: 16,
     padding: 16,
     marginBottom: 16,
-    shadowColor: COLORS.black,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    ...Platform.select({
+      ios: {
+        shadowColor: COLORS.black,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 3,
+      },
+    }),
   },
   avatarContainer: {
     position: 'relative',
@@ -449,114 +538,240 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   ratingText: {
-    color: '#FFC107',
+    color: '#FFD700',
     fontSize: 14,
     marginRight: 4,
   },
   ratingValue: {
-    color: COLORS.textSecondary,
     fontSize: 14,
+    color: COLORS.textSecondary,
   },
   editProfileButton: {
-    padding: 8,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: COLORS.background,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   section: {
     backgroundColor: COLORS.white,
-    borderRadius: 8,
+    borderRadius: 16,
     padding: 16,
     marginBottom: 16,
-    shadowColor: COLORS.black,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    ...Platform.select({
+      ios: {
+        shadowColor: COLORS.black,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 3,
+      },
+    }),
+  },
+  dashboardSection: {
+    backgroundColor: COLORS.white,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    ...Platform.select({
+      ios: {
+        shadowColor: COLORS.black,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 3,
+      },
+    }),
   },
   sectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 18,
+    fontWeight: 'bold',
     color: COLORS.text,
     marginBottom: 16,
   },
-  infoItem: {
+  statsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  statCard: {
+    flex: 1,
+    backgroundColor: COLORS.background,
+    borderRadius: 12,
+    padding: 12,
+    marginHorizontal: 4,
+    alignItems: 'center',
+  },
+  statValue: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: COLORS.primary,
+  },
+  statLabel: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+    marginTop: 4,
+  },
+  earningsCard: {
+    backgroundColor: COLORS.background,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+  },
+  earningsLabel: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+  },
+  earningsValue: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: COLORS.primary,
+    marginBottom: 12,
+  },
+  responseRateContainer: {
+    marginTop: 8,
+  },
+  responseRateLabel: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    marginBottom: 4,
+  },
+  responseRateBar: {
+    height: 8,
+    backgroundColor: COLORS.lightGray,
+    borderRadius: 4,
+    marginBottom: 4,
+  },
+  responseRateFill: {
+    height: 8,
+    backgroundColor: COLORS.success,
+    borderRadius: 4,
+  },
+  responseRateValue: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: COLORS.success,
+    textAlign: 'right',
+  },
+  quickActionsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+  },
+  quickActionButton: {
+    alignItems: 'center',
+    padding: 12,
+    position: 'relative',
+  },
+  quickActionText: {
+    fontSize: 14,
+    color: COLORS.text,
+    marginTop: 4,
+  },
+  notificationBadge: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    backgroundColor: 'red',
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  notificationText: {
+    color: COLORS.white,
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  infoRow: {
     flexDirection: 'row',
     marginBottom: 12,
   },
   infoLabel: {
+    width: 150,
     fontSize: 14,
     color: COLORS.textSecondary,
-    width: 140,
   },
-  infoText: {
+  infoValue: {
+    flex: 1,
     fontSize: 14,
     color: COLORS.text,
-    flex: 1,
+    fontWeight: '500',
+  },
+  bioContainer: {
+    marginTop: 8,
+  },
+  bioLabel: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    marginBottom: 4,
   },
   bioText: {
     fontSize: 14,
     color: COLORS.text,
     lineHeight: 20,
   },
-  contactText: {
-    fontSize: 14,
-    color: COLORS.text,
-    marginLeft: 12,
-  },
-  settingItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.lightGrey,
-  },
-  settingLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  settingText: {
-    fontSize: 14,
-    color: COLORS.text,
-    marginLeft: 12,
-  },
-  statsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  statItem: {
-    alignItems: 'center',
-    flex: 1,
-  },
-  statValue: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: COLORS.primary,
-    marginBottom: 4,
-  },
-  statLabel: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-    textAlign: 'center',
-  },
   actionButtons: {
     marginTop: 16,
-    flexDirection: 'row',
   },
   saveButton: {
-    flex: 1,
-    marginRight: 8,
+    marginBottom: 8,
   },
   cancelButton: {
-    flex: 1,
-    marginLeft: 8,
   },
-  logoutButton: {
+  settingRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 16,
   },
-  version: {
+  settingLabel: {
+    fontSize: 16,
+    color: COLORS.text,
+    marginBottom: 4,
+  },
+  settingDescription: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    maxWidth: '80%',
+  },
+  settingButton: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.lightGray,
+  },
+  settingButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  settingButtonText: {
+    fontSize: 16,
+    color: COLORS.text,
+    marginLeft: 12,
+  },
+  logoutButton: {
+    borderBottomWidth: 0,
+    marginTop: 8,
+  },
+  logoutButtonText: {
+    fontSize: 16,
+    color: COLORS.error,
+    marginLeft: 12,
+  },
+  versionText: {
     textAlign: 'center',
     fontSize: 12,
     color: COLORS.textSecondary,
-    marginBottom: 24,
+    marginBottom: 16,
   },
 });
 

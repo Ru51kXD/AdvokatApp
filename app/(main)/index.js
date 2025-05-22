@@ -15,7 +15,7 @@ import { useEffect, useState } from 'react';
 import { View, Text, ActivityIndicator, StyleSheet, Alert } from 'react-native';
 import { COLORS } from '../../src/constants';
 
-export default function MainAppScreen() {
+export default function Page() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
 

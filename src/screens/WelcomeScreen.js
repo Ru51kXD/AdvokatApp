@@ -1,172 +1,120 @@
-import React, { useState } from 'react';
-import { View, StyleSheet, Image, Text, SafeAreaView, ActivityIndicator } from 'react-native';
-import Button from '../components/Button';
-import { COLORS } from '../constants';
-import { useAuth } from '../contexts/AuthContext';
+import React from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  Dimensions,
+} from 'react-native';
+import { COLORS, FONTS, SIZES, SHADOWS } from '../constants';
+import { LinearGradient } from 'expo-linear-gradient';
+
+const { width, height } = Dimensions.get('window');
 
 const WelcomeScreen = ({ navigation }) => {
-  const { demoLogin } = useAuth();
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState(null);
-  
-  const handleDemoLogin = async (userType) => {
-    setIsLoading(true);
-    setError(null);
-    
-    try {
-      await demoLogin(userType);
-      // Авторизация успешна, навигация будет обработана в AppNavigation
-    } catch (err) {
-      setError('Ошибка при входе с демо-данными');
-      console.error(err);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-  
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.content}>
-        <Image
-          source={require('../../assets/images/icon.png')}
-          style={styles.logo}
-          resizeMode="contain"
-        />
-        
-        <Text style={styles.title}>advokaty.kz</Text>
-        <Text style={styles.subtitle}>
-          Cервис для поиска адвокатов в Казахстане
-        </Text>
-        
-        <View style={styles.description}>
-          <Text style={styles.descriptionText}>
-            Свяжитесь с опытными юристами и получите профессиональную юридическую консультацию
+    <View style={styles.container}>
+      <LinearGradient
+        colors={[COLORS.primary, COLORS.secondary]}
+        style={styles.gradient}
+      >
+        <View style={styles.content}>
+          <View style={styles.logoContainer}>
+            <Text style={styles.logoText}>A</Text>
+          </View>
+          <Text style={styles.title}>Добро пожаловать в Advokaty.kz</Text>
+          <Text style={styles.subtitle}>
+            Найдите лучшего юриста для решения ваших правовых вопросов
           </Text>
         </View>
 
         <View style={styles.buttonContainer}>
-          <Button
-            title="Войти"
+          <TouchableOpacity
+            style={styles.button}
             onPress={() => navigation.navigate('Login')}
-            style={styles.button}
-          />
-          <Button
-            title="Зарегистрироваться"
+          >
+            <Text style={styles.buttonText}>Войти</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.button, styles.registerButton]}
             onPress={() => navigation.navigate('Register')}
-            variant="outline"
-            style={styles.button}
-          />
-          
-          <View style={styles.divider}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>или</Text>
-            <View style={styles.dividerLine} />
-          </View>
-          
-          <Text style={styles.demoTitle}>Демо-доступ к приложению:</Text>
-          
-          {isLoading ? (
-            <ActivityIndicator size="large" color={COLORS.primary} style={styles.loader} />
-          ) : (
-            <>
-              <Button
-                title="Войти как клиент (демо)"
-                onPress={() => handleDemoLogin('client')}
-                variant="secondary"
-                style={styles.demoButton}
-              />
-              <Button
-                title="Войти как адвокат (демо)"
-                onPress={() => handleDemoLogin('lawyer')}
-                variant="secondary"
-                style={styles.demoButton}
-              />
-              {error && <Text style={styles.errorText}>{error}</Text>}
-            </>
-          )}
+          >
+            <Text style={[styles.buttonText, styles.registerButtonText]}>
+              Зарегистрироваться
+            </Text>
+          </TouchableOpacity>
         </View>
-      </View>
-    </SafeAreaView>
+      </LinearGradient>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.white,
+  },
+  gradient: {
+    flex: 1,
+    justifyContent: 'space-between',
+    padding: SIZES.padding * 2,
   },
   content: {
     flex: 1,
-    alignItems: 'center',
     justifyContent: 'center',
-    padding: 24,
+    alignItems: 'center',
   },
-  logo: {
-    width: 120,
-    height: 120,
-    marginBottom: 24,
+  logoContainer: {
+    width: width * 0.4,
+    height: width * 0.4,
+    borderRadius: width * 0.2,
+    backgroundColor: COLORS.white,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: SIZES.padding * 2,
+    ...SHADOWS.medium,
+  },
+  logoText: {
+    ...FONTS.h1,
+    color: COLORS.primary,
+    fontSize: width * 0.15,
   },
   title: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: COLORS.primary,
-    marginBottom: 8,
+    ...FONTS.h1,
+    color: COLORS.white,
+    textAlign: 'center',
+    marginBottom: SIZES.padding,
   },
   subtitle: {
-    fontSize: 18,
-    color: COLORS.text,
-    marginBottom: 32,
+    ...FONTS.body2,
+    color: COLORS.white,
     textAlign: 'center',
-  },
-  description: {
-    marginBottom: 48,
-    width: '100%',
-  },
-  descriptionText: {
-    fontSize: 16,
-    color: COLORS.textSecondary,
-    textAlign: 'center',
-    lineHeight: 24,
+    opacity: 0.8,
   },
   buttonContainer: {
     width: '100%',
-    marginTop: 'auto',
+    paddingBottom: SIZES.padding * 2,
   },
   button: {
-    marginBottom: 16,
-  },
-  divider: {
-    flexDirection: 'row',
+    backgroundColor: COLORS.white,
+    padding: SIZES.padding,
+    borderRadius: SIZES.radius,
     alignItems: 'center',
-    marginVertical: 16,
+    marginBottom: SIZES.padding,
   },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: COLORS.lightGrey,
+  buttonText: {
+    ...FONTS.body2,
+    color: COLORS.primary,
+    fontWeight: 'bold',
   },
-  dividerText: {
-    color: COLORS.textSecondary,
-    paddingHorizontal: 16,
-    fontSize: 16,
+  registerButton: {
+    backgroundColor: 'transparent',
+    borderWidth: 2,
+    borderColor: COLORS.white,
   },
-  demoTitle: {
-    fontSize: 16,
-    color: COLORS.textSecondary,
-    textAlign: 'center',
-    marginBottom: 12,
+  registerButtonText: {
+    color: COLORS.white,
   },
-  demoButton: {
-    marginBottom: 12,
-  },
-  loader: {
-    marginTop: 20,
-  },
-  errorText: {
-    color: COLORS.error,
-    textAlign: 'center',
-    marginTop: 12,
-  }
 });
 
 export default WelcomeScreen; 

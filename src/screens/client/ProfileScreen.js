@@ -17,7 +17,7 @@ import Button from '../../components/Button';
 import { useAuth } from '../../contexts/AuthContext';
 
 const ClientProfileScreen = ({ navigation }) => {
-  const { user, logout } = useAuth();
+  const { authState, signOut } = useAuth();
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
 
   const handleLogout = async () => {
@@ -29,7 +29,14 @@ const ClientProfileScreen = ({ navigation }) => {
         { 
           text: 'Выйти', 
           onPress: async () => {
-            await logout();
+            const result = await signOut();
+            if (result.success) {
+              // Вместо использования navigation.reset, просто выходим
+              // Приложение автоматически переключится на AuthStack через AppNavigation
+              console.log('Выход из системы выполнен успешно');
+            } else {
+              Alert.alert('Ошибка', result.error || 'Не удалось выйти из аккаунта');
+            }
           },
           style: 'destructive'
         }
@@ -70,7 +77,7 @@ const ClientProfileScreen = ({ navigation }) => {
           </View>
           
           <View style={styles.profileInfo}>
-            <Text style={styles.name}>{user?.username || 'Пользователь'}</Text>
+            <Text style={styles.name}>{authState?.user?.username || 'Пользователь'}</Text>
             <Text style={styles.userType}>Клиент</Text>
           </View>
           
@@ -85,12 +92,12 @@ const ClientProfileScreen = ({ navigation }) => {
           
           <View style={styles.infoItem}>
             <Ionicons name="mail-outline" size={20} color={COLORS.textSecondary} />
-            <Text style={styles.infoText}>{user?.email || 'Нет данных'}</Text>
+            <Text style={styles.infoText}>{authState?.user?.email || 'Нет данных'}</Text>
           </View>
           
           <View style={styles.infoItem}>
             <Ionicons name="call-outline" size={20} color={COLORS.textSecondary} />
-            <Text style={styles.infoText}>{user?.phone || 'Не указан'}</Text>
+            <Text style={styles.infoText}>{authState?.user?.phone || 'Не указан'}</Text>
           </View>
         </View>
 
@@ -303,4 +310,6 @@ const styles = StyleSheet.create({
 });
 
 export default ClientProfileScreen; 
+ 
+ 
  

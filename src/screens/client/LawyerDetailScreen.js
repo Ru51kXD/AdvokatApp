@@ -24,16 +24,24 @@ import ChatService from '../../services/ChatService';
 import ImageService from '../../services/ImageService';
 
 const LawyerDetailScreen = ({ route, navigation }) => {
-  const { lawyerId } = route.params;
+  const { lawyerId, lawyer: initialLawyer } = route.params;
   const { user } = useAuth();
   
-  const [lawyer, setLawyer] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [lawyer, setLawyer] = useState(initialLawyer || null);
+  const [loading, setLoading] = useState(!initialLawyer);
   const [error, setError] = useState(null);
   const [creatingChat, setCreatingChat] = useState(false);
   const [showAllReviews, setShowAllReviews] = useState(false);
 
   const fetchLawyerDetails = useCallback(async () => {
+    // Если у нас уже есть данные адвоката из навигации, не нужно их запрашивать
+    if (initialLawyer) {
+      console.log('Using provided lawyer data');
+      setLawyer(initialLawyer);
+      setLoading(false);
+      return;
+    }
+    
     console.log('Fetching lawyer details with ID:', lawyerId);
     if (!lawyerId) {
       setError('Адвокат не найден');
@@ -59,7 +67,7 @@ const LawyerDetailScreen = ({ route, navigation }) => {
     } finally {
       setLoading(false);
     }
-  }, [lawyerId]);
+  }, [lawyerId, initialLawyer]);
 
   useEffect(() => {
     fetchLawyerDetails();
@@ -82,63 +90,50 @@ const LawyerDetailScreen = ({ route, navigation }) => {
   };
 
   const handleSendMessage = async () => {
-    if (!user) {
-      Alert.alert(
-        'Требуется авторизация',
-        'Для отправки сообщения необходимо войти в систему',
-        [{ text: 'OK' }]
-      );
-      return;
-    }
-
-    if (!lawyer || !lawyer.user_id) {
-      Alert.alert(
-        'Ошибка',
-        'Не удалось определить адвоката для отправки сообщения',
-        [{ text: 'OK' }]
-      );
-      return;
-    }
-
     try {
       setCreatingChat(true);
-      console.log('Creating chat with lawyer user_id:', lawyer.user_id);
       
-      // Проверяем, существует ли уже беседа с этим адвокатом
-      const existingConversations = await ChatService.getConversationsByClientId(user.id);
-      console.log('Existing conversations:', existingConversations.length);
+      if (!lawyer || !lawyer.user_id) {
+        Alert.alert(
+          'Ошибка',
+          'Не удалось определить адвоката для отправки сообщения',
+          [{ text: 'OK' }]
+        );
+        return;
+      }
       
-      const existingConversation = existingConversations.find(
-        conv => conv.lawyer_id === lawyer.user_id
+      // Определяем ID адвоката
+      const lawyerId = lawyer.user_id;
+      
+      // Если пользователь не авторизован, создаем временный ID для гостя
+      const guestId = "guest_" + Math.floor(Math.random() * 1000000);
+      const senderId = user ? user.id : guestId;
+      
+      console.log('Creating chat with lawyer:', {
+        senderId,
+        lawyerId,
+        isAuthenticated: Boolean(user)
+      });
+      
+      // Отправляем первое сообщение и создаем чат
+      const firstMessage = "Здравствуйте! Меня интересует консультация по юридическому вопросу.";
+      const result = await ChatService.sendMessage(
+        senderId, 
+        lawyerId,
+        firstMessage
       );
       
-      if (existingConversation) {
-        // Если беседа существует, переходим к ней
-        console.log('Using existing conversation:', existingConversation.id);
-        navigation.navigate('Chat', { 
-          conversationId: existingConversation.id,
-          title: lawyer.username
-        });
-      } else {
-        // Если беседы нет, создаем новую
-        console.log('Creating new conversation between client', user.id, 'and lawyer', lawyer.user_id);
-        const conversationId = await ChatService.createConversation(
-          user.id, 
-          lawyer.user_id
-        );
-        
-        console.log('Created new conversation:', conversationId);
-        // Переходим к новой беседе
-        navigation.navigate('Chat', { 
-          conversationId,
-          title: lawyer.username
-        });
-      }
+      // Переходим к экрану чата
+      navigation.navigate('ChatScreen', {
+        conversationId: result.conversationId,
+        title: lawyer.username || 'Адвокат',
+        guestId: !user ? senderId : null
+      });
     } catch (err) {
       console.error('Error creating chat:', err);
       Alert.alert(
         'Ошибка',
-        'Не удалось создать чат. Пожалуйста, попробуйте позже.',
+        'Не удалось создать чат. Пожалуйста, попробуйте позже: ' + err.message,
         [{ text: 'OK' }]
       );
     } finally {
@@ -570,4 +565,6 @@ const styles = StyleSheet.create({
 });
 
 export default LawyerDetailScreen; 
+ 
+ 
  

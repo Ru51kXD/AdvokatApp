@@ -1,24 +1,24 @@
 export const LAW_AREAS = [
-  'Уголовное право',
-  'Гражданское право',
-  'Семейное право',
-  'Административное право',
-  'Трудовое право',
-  'Земельное право',
-  'Налоговое право',
-  'Корпоративное право',
-  'Медицинское право',
-  'Интеллектуальная собственность',
-  'Другое'
+  { label: 'Уголовное право', value: 'Уголовное право' },
+  { label: 'Гражданское право', value: 'Гражданское право' },
+  { label: 'Семейное право', value: 'Семейное право' },
+  { label: 'Административное право', value: 'Административное право' },
+  { label: 'Трудовое право', value: 'Трудовое право' },
+  { label: 'Земельное право', value: 'Земельное право' },
+  { label: 'Налоговое право', value: 'Налоговое право' },
+  { label: 'Корпоративное право', value: 'Корпоративное право' },
+  { label: 'Медицинское право', value: 'Медицинское право' },
+  { label: 'Интеллектуальная собственность', value: 'Интеллектуальная собственность' },
+  { label: 'Другое', value: 'Другое' }
 ];
 
 export const PRICE_RANGES = [
-  'До 10 000 тенге',
-  '10 000 - 30 000 тенге',
-  '30 000 - 50 000 тенге',
-  '50 000 - 100 000 тенге',
-  'Свыше 100 000 тенге',
-  'Договорная'
+  { label: 'До 10 000 тенге', value: 'До 10 000 тенге' },
+  { label: '10 000 - 30 000 тенге', value: '10 000 - 30 000 тенге' },
+  { label: '30 000 - 50 000 тенге', value: '30 000 - 50 000 тенге' },
+  { label: '50 000 - 100 000 тенге', value: '50 000 - 100 000 тенге' },
+  { label: 'Свыше 100 000 тенге', value: 'Свыше 100 000 тенге' },
+  { label: 'Договорная', value: 'Договорная' }
 ];
 
 export const EXPERIENCE_OPTIONS = [
@@ -30,40 +30,109 @@ export const EXPERIENCE_OPTIONS = [
 ];
 
 export const KAZAKHSTAN_CITIES = [
-  'Астана',
-  'Алматы',
-  'Шымкент',
-  'Караганда',
-  'Актобе',
-  'Тараз',
-  'Павлодар',
-  'Усть-Каменогорск',
-  'Семей',
-  'Атырау',
-  'Костанай',
-  'Кызылорда',
-  'Уральск',
-  'Петропавловск',
-  'Актау',
-  'Темиртау',
-  'Туркестан',
-  'Кокшетау',
-  'Талдыкорган',
-  'Экибастуз'
+  { label: 'Астана', value: 'Астана' },
+  { label: 'Алматы', value: 'Алматы' },
+  { label: 'Шымкент', value: 'Шымкент' },
+  { label: 'Караганда', value: 'Караганда' },
+  { label: 'Актобе', value: 'Актобе' },
+  { label: 'Тараз', value: 'Тараз' },
+  { label: 'Павлодар', value: 'Павлодар' },
+  { label: 'Усть-Каменогорск', value: 'Усть-Каменогорск' },
+  { label: 'Семей', value: 'Семей' },
+  { label: 'Атырау', value: 'Атырау' },
+  { label: 'Костанай', value: 'Костанай' },
+  { label: 'Кызылорда', value: 'Кызылорда' },
+  { label: 'Уральск', value: 'Уральск' },
+  { label: 'Петропавловск', value: 'Петропавловск' },
+  { label: 'Актау', value: 'Актау' },
+  { label: 'Темиртау', value: 'Темиртау' },
+  { label: 'Туркестан', value: 'Туркестан' },
+  { label: 'Кокшетау', value: 'Кокшетау' },
+  { label: 'Талдыкорган', value: 'Талдыкорган' },
+  { label: 'Экибастуз', value: 'Экибастуз' }
 ];
 
 export const COLORS = {
-  primary: '#5E35B1',
-  secondary: '#7E57C2',
-  background: '#F5F5F5',
+  primary: '#2E5BFF',
+  secondary: '#1E3A8A',
+  background: '#F5F6FA',
   white: '#FFFFFF',
   black: '#000000',
-  grey: '#9E9E9E',
-  lightGrey: '#E0E0E0',
-  error: '#D32F2F',
-  success: '#4CAF50',
-  text: '#212121',
-  textSecondary: '#757575'
+  text: '#1A1A1A',
+  textSecondary: '#666666',
+  gray: '#8E8E93',
+  lightGray: '#E5E5EA',
+  border: '#E5E5EA',
+  error: '#FF3B30',
+  success: '#34C759',
+  warning: '#FFCC00',
+};
+
+export const FONTS = {
+  h1: {
+    fontSize: 32,
+    fontWeight: 'bold',
+  },
+  h2: {
+    fontSize: 24,
+    fontWeight: 'bold',
+  },
+  h3: {
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  body1: {
+    fontSize: 18,
+  },
+  body2: {
+    fontSize: 16,
+  },
+  body3: {
+    fontSize: 14,
+  },
+  body4: {
+    fontSize: 12,
+  },
+};
+
+export const SIZES = {
+  base: 8,
+  padding: 16,
+  radius: 12,
+  margin: 16,
+};
+
+export const SHADOWS = {
+  small: {
+    shadowColor: COLORS.black,
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 2,
+  },
+  medium: {
+    shadowColor: COLORS.black,
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.30,
+    shadowRadius: 4.65,
+    elevation: 4,
+  },
+  large: {
+    shadowColor: COLORS.black,
+    shadowOffset: {
+      width: 0,
+      height: 6,
+    },
+    shadowOpacity: 0.37,
+    shadowRadius: 7.49,
+    elevation: 12,
+  },
 };
 
 export const REQUEST_STATUS = {

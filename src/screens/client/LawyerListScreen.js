@@ -130,7 +130,7 @@ const LawyerListScreen = ({ route, navigation }) => {
     }
     
     console.log('Selected lawyer:', lawyer.id);
-    navigation.navigate('LawyerDetail', { lawyerId: lawyer.id });
+    navigation.navigate('LawyerDetail', { lawyer: lawyer });
   }, [navigation]);
 
   const handleRetry = useCallback(() => {
@@ -366,4 +366,6 @@ const styles = StyleSheet.create({
 });
 
 export default LawyerListScreen; 
+ 
+ 
  

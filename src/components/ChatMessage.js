@@ -1,24 +1,35 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { COLORS } from '../constants';
-import { format } from 'date-fns';
-import ru from 'date-fns/locale/ru';
 
 const ChatMessage = ({ message, isOwn }) => {
   // Форматирование времени сообщения
   const formatMessageTime = (timestamp) => {
     if (!timestamp) return '';
     
-    const date = new Date(timestamp);
-    const now = new Date();
-    const isToday = date.setHours(0, 0, 0, 0) === now.setHours(0, 0, 0, 0);
-    
-    if (isToday) {
-      return format(date, 'HH:mm');
-    } else {
-      return format(date, 'd MMM, HH:mm', { locale: ru });
+    try {
+      const date = new Date(timestamp);
+      const now = new Date();
+      
+      // Проверяем, сегодня ли было отправлено сообщение
+      const isToday = date.getDate() === now.getDate() &&
+                      date.getMonth() === now.getMonth() &&
+                      date.getFullYear() === now.getFullYear();
+      
+      if (isToday) {
+        return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      } else {
+        return date.toLocaleDateString([], { day: 'numeric', month: 'short' }) + 
+               ', ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      }
+    } catch (error) {
+      console.error('Error formatting date:', error);
+      return '';
     }
   };
+
+  // Определяем, является ли сообщение от гостя
+  const isFromGuest = message.is_from_guest || message.sender_id?.toString().startsWith('guest_');
 
   return (
     <View style={[
@@ -27,7 +38,8 @@ const ChatMessage = ({ message, isOwn }) => {
     ]}>
       <View style={[
         styles.bubble,
-        isOwn ? styles.ownBubble : styles.otherBubble
+        isOwn ? styles.ownBubble : styles.otherBubble,
+        isFromGuest ? styles.guestBubble : null
       ]}>
         <Text style={[
           styles.messageText,
@@ -36,12 +48,20 @@ const ChatMessage = ({ message, isOwn }) => {
           {message.message}
         </Text>
         <View style={styles.timeContainer}>
-          <Text style={styles.timeText}>
+          <Text style={[
+            styles.timeText,
+            isOwn ? styles.ownTimeText : styles.otherTimeText
+          ]}>
             {formatMessageTime(message.created_at)}
           </Text>
-          {isOwn && (
+          {isOwn && !isFromGuest && (
             <Text style={styles.statusText}>
               {message.read ? 'Прочитано' : 'Отправлено'}
+            </Text>
+          )}
+          {isFromGuest && (
+            <Text style={[styles.guestLabel, isOwn ? styles.ownGuestLabel : styles.otherGuestLabel]}>
+              Гость
             </Text>
           )}
         </View>
@@ -76,6 +96,10 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.lightGrey,
     borderTopLeftRadius: 4,
   },
+  guestBubble: {
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.1)', 
+  },
   messageText: {
     fontSize: 16,
     marginBottom: 4,
@@ -93,13 +117,29 @@ const styles = StyleSheet.create({
   },
   timeText: {
     fontSize: 12,
-    color: '#rgba(255, 255, 255, 0.7)',
     marginRight: 4,
+  },
+  ownTimeText: {
+    color: 'rgba(255, 255, 255, 0.7)',
+  },
+  otherTimeText: {
+    color: 'rgba(0, 0, 0, 0.5)',
   },
   statusText: {
     fontSize: 12,
-    color: '#rgba(255, 255, 255, 0.7)',
+    color: 'rgba(255, 255, 255, 0.7)',
   },
+  guestLabel: {
+    fontSize: 11,
+    fontStyle: 'italic',
+    marginLeft: 4,
+  },
+  ownGuestLabel: {
+    color: 'rgba(255, 255, 255, 0.7)',
+  },
+  otherGuestLabel: {
+    color: 'rgba(0, 0, 0, 0.5)',
+  }
 });
 
 export default ChatMessage; 

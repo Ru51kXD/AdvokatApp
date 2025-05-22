@@ -1,81 +1,108 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Modal, FlatList } from 'react-native';
+import { 
+  View, 
+  Text, 
+  StyleSheet, 
+  TouchableOpacity, 
+  Modal, 
+  FlatList, 
+  SafeAreaView 
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../constants';
 
-const Picker = ({
-  label,
-  value,
-  onValueChange,
-  items = [],
-  placeholder = 'Выберите...',
-  error,
-  style,
+const Picker = ({ 
+  label, 
+  placeholder, 
+  items = [], 
+  value, 
+  onValueChange, 
+  error 
 }) => {
   const [modalVisible, setModalVisible] = useState(false);
   
-  const selectedItem = items.find(item => item === value || item.value === value);
-  const displayValue = selectedItem 
-    ? (typeof selectedItem === 'string' ? selectedItem : selectedItem.label) 
-    : null;
-
+  const selectedItem = items.find(item => item.value === value);
+  
+  const handleSelect = (selectedValue) => {
+    onValueChange(selectedValue);
+    setModalVisible(false);
+  };
+  
   return (
-    <View style={[styles.container, style]}>
+    <View style={styles.container}>
       {label && <Text style={styles.label}>{label}</Text>}
       
-      <TouchableOpacity
-        style={[styles.pickerContainer, error && styles.errorInput]}
+      <TouchableOpacity 
+        style={[
+          styles.pickerContainer, 
+          error ? styles.errorBorder : null
+        ]} 
         onPress={() => setModalVisible(true)}
-        activeOpacity={0.7}
       >
-        <Text style={displayValue ? styles.valueText : styles.placeholderText}>
-          {displayValue || placeholder}
+        <Text 
+          style={[
+            styles.selectedText,
+            !value ? styles.placeholderText : null
+          ]}
+          numberOfLines={1}
+        >
+          {selectedItem ? selectedItem.label : placeholder}
         </Text>
+        <Ionicons name="chevron-down" size={16} color={COLORS.textSecondary} />
       </TouchableOpacity>
       
       {error && <Text style={styles.errorText}>{error}</Text>}
       
       <Modal
         visible={modalVisible}
-        transparent={true}
         animationType="slide"
+        transparent={true}
         onRequestClose={() => setModalVisible(false)}
       >
-        <View style={styles.modalContainer}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>{label || 'Выберите значение'}</Text>
-            
-            <FlatList
-              data={items}
-              keyExtractor={(item, index) => index.toString()}
-              renderItem={({ item, index }) => {
-                const itemValue = typeof item === 'string' ? item : item.value;
-                const itemLabel = typeof item === 'string' ? item : item.label;
-                const isSelected = value === itemValue;
-                
-                return (
+        <TouchableOpacity 
+          style={styles.modalBackdrop}
+          activeOpacity={1}
+          onPress={() => setModalVisible(false)}
+        >
+          <SafeAreaView style={styles.modalContainer}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>{label}</Text>
+                <TouchableOpacity 
+                  style={styles.closeButton}
+                  onPress={() => setModalVisible(false)}
+                >
+                  <Ionicons name="close" size={24} color={COLORS.text} />
+                </TouchableOpacity>
+              </View>
+              
+              <FlatList
+                data={items}
+                keyExtractor={(item) => item.value}
+                renderItem={({ item }) => (
                   <TouchableOpacity
-                    style={[styles.itemContainer, isSelected && styles.selectedItem]}
-                    onPress={() => {
-                      onValueChange(itemValue);
-                      setModalVisible(false);
-                    }}
+                    style={[
+                      styles.optionItem,
+                      item.value === value ? styles.selectedOption : null
+                    ]}
+                    onPress={() => handleSelect(item.value)}
                   >
-                    <Text style={[styles.itemText, isSelected && styles.selectedItemText]}>
-                      {itemLabel}
+                    <Text style={[
+                      styles.optionText,
+                      item.value === value ? styles.selectedOptionText : null
+                    ]}>
+                      {item.label}
                     </Text>
+                    {item.value === value && (
+                      <Ionicons name="checkmark" size={20} color={COLORS.primary} />
+                    )}
                   </TouchableOpacity>
-                );
-              }}
-            />
-            
-            <TouchableOpacity
-              style={styles.closeButton}
-              onPress={() => setModalVisible(false)}
-            >
-              <Text style={styles.closeButtonText}>Закрыть</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+                )}
+                ItemSeparatorComponent={() => <View style={styles.separator} />}
+              />
+            </View>
+          </SafeAreaView>
+        </TouchableOpacity>
       </Modal>
     </View>
   );
@@ -84,84 +111,92 @@ const Picker = ({
 const styles = StyleSheet.create({
   container: {
     marginBottom: 16,
-    width: '100%',
   },
   label: {
-    fontSize: 14,
+    fontSize: 16,
+    fontWeight: '500',
     color: COLORS.text,
     marginBottom: 8,
-    fontWeight: '500',
   },
   pickerContainer: {
-    backgroundColor: COLORS.white,
+    height: 48,
     borderWidth: 1,
-    borderColor: COLORS.lightGrey,
+    borderColor: COLORS.border,
     borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: COLORS.white,
+  },
+  selectedText: {
+    fontSize: 16,
+    color: COLORS.text,
+    flex: 1,
   },
   placeholderText: {
-    color: COLORS.grey,
-    fontSize: 16,
+    color: COLORS.textSecondary,
   },
-  valueText: {
-    color: COLORS.text,
-    fontSize: 16,
-  },
-  errorInput: {
+  errorBorder: {
     borderColor: COLORS.error,
   },
   errorText: {
     color: COLORS.error,
-    fontSize: 12,
+    fontSize: 14,
     marginTop: 4,
   },
-  modalContainer: {
+  modalBackdrop: {
     flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'flex-end',
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
-  modalContent: {
+  modalContainer: {
     backgroundColor: COLORS.white,
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
-    paddingTop: 20,
-    paddingBottom: 40,
     maxHeight: '80%',
+  },
+  modalContent: {
+    paddingBottom: 24,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
   },
   modalTitle: {
     fontSize: 18,
     fontWeight: '600',
     color: COLORS.text,
-    marginBottom: 16,
-    paddingHorizontal: 20,
   },
-  itemContainer: {
-    paddingVertical: 12,
-    paddingHorizontal: 20,
+  closeButton: {
+    padding: 4,
   },
-  itemText: {
+  optionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+  },
+  selectedOption: {
+    backgroundColor: COLORS.primaryLight,
+  },
+  optionText: {
     fontSize: 16,
     color: COLORS.text,
   },
-  selectedItem: {
-    backgroundColor: COLORS.secondary + '40',
-  },
-  selectedItemText: {
+  selectedOptionText: {
     color: COLORS.primary,
-    fontWeight: '600',
+    fontWeight: '500',
   },
-  closeButton: {
-    marginTop: 16,
-    paddingVertical: 14,
-    alignItems: 'center',
-    borderTopWidth: 1,
-    borderTopColor: COLORS.lightGrey,
-  },
-  closeButtonText: {
-    color: COLORS.primary,
-    fontSize: 16,
-    fontWeight: '600',
+  separator: {
+    height: 1,
+    backgroundColor: COLORS.border,
   },
 });
 

@@ -23,10 +23,18 @@ const ClientRequestsScreen = ({ navigation }) => {
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [isGuest, setIsGuest] = useState(false);
 
   const fetchRequests = useCallback(async () => {
-    if (!user) return;
+    // Check if user is logged in
+    if (!user) {
+      setIsGuest(true);
+      setLoading(false);
+      setRequests([]); // Empty requests for guest users
+      return;
+    }
     
+    setIsGuest(false);
     setLoading(true);
     try {
       const clientRequests = await RequestService.getClientRequests(user.id);
@@ -66,15 +74,32 @@ const ClientRequestsScreen = ({ navigation }) => {
   const renderEmptyComponent = () => (
     <View style={styles.emptyContainer}>
       <Ionicons name="document-text-outline" size={64} color={COLORS.lightGrey} />
-      <Text style={styles.emptyTitle}>У вас пока нет заявок</Text>
-      <Text style={styles.emptySubtitle}>
-        Создайте свою первую заявку, и адвокаты смогут ответить на неё
-      </Text>
-      <Button
-        title="Создать заявку"
-        onPress={handleCreateRequest}
-        style={styles.createButton}
-      />
+      
+      {isGuest ? (
+        <>
+          <Text style={styles.emptyTitle}>Вам необходимо авторизоваться</Text>
+          <Text style={styles.emptySubtitle}>
+            Для просмотра и создания заявок войдите в систему или зарегистрируйтесь
+          </Text>
+          <Button
+            title="Войти"
+            onPress={() => navigation.navigate('Login')}
+            style={styles.createButton}
+          />
+        </>
+      ) : (
+        <>
+          <Text style={styles.emptyTitle}>У вас пока нет заявок</Text>
+          <Text style={styles.emptySubtitle}>
+            Создайте свою первую заявку, и адвокаты смогут ответить на неё
+          </Text>
+          <Button
+            title="Создать заявку"
+            onPress={handleCreateRequest}
+            style={styles.createButton}
+          />
+        </>
+      )}
     </View>
   );
 
@@ -113,7 +138,7 @@ const ClientRequestsScreen = ({ navigation }) => {
         }
       />
       
-      {requests.length > 0 && (
+      {!isGuest && requests.length > 0 && (
         <TouchableOpacity 
           style={styles.fab}
           onPress={handleCreateRequest}

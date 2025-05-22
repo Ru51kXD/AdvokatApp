@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   View, 
   StyleSheet, 
@@ -12,6 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Formik } from 'formik';
 import * as Yup from 'yup';
+import { Ionicons } from '@expo/vector-icons';
 
 import { COLORS, LAW_AREAS, PRICE_RANGES, EXPERIENCE_OPTIONS } from '../../constants';
 import Input from '../../components/Input';
@@ -38,12 +39,34 @@ const RequestScreen = ({ route, navigation }) => {
   // If there's a lawyerId in route params, we're creating a request for a specific lawyer
   const lawyerId = route.params?.lawyerId;
 
+  // Check if user is logged in when component mounts
+  useEffect(() => {
+    if (!user) {
+      // Use a timeout to show the alert after navigation is complete
+      const timer = setTimeout(() => {
+        Alert.alert(
+          'Требуется авторизация',
+          'Пожалуйста, войдите в систему для создания заявки.',
+          [
+            { text: 'Отмена', onPress: () => navigation.goBack() },
+            { text: 'Войти', onPress: () => navigation.navigate('Login') }
+          ]
+        );
+      }, 300);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [user, navigation]);
+
   const handleSubmit = async (values) => {
     if (!user) {
       Alert.alert(
         'Требуется авторизация',
         'Пожалуйста, войдите в систему для создания заявки.',
-        [{ text: 'OK' }]
+        [
+          { text: 'Отмена', onPress: () => navigation.goBack() },
+          { text: 'Войти', onPress: () => navigation.navigate('Login') }
+        ]
       );
       return;
     }
@@ -88,6 +111,32 @@ const RequestScreen = ({ route, navigation }) => {
       setIsLoading(false);
     }
   };
+
+  // If user is not logged in, show authentication message
+  if (!user) {
+    return (
+      <SafeAreaView edges={['bottom']} style={styles.container}>
+        <View style={styles.authContainer}>
+          <Ionicons name="lock-closed-outline" size={64} color={COLORS.lightGrey} />
+          <Text style={styles.authTitle}>Требуется авторизация</Text>
+          <Text style={styles.authMessage}>
+            Для создания заявок необходимо войти в систему или зарегистрироваться
+          </Text>
+          <Button
+            title="Войти"
+            onPress={() => navigation.navigate('Login')}
+            style={styles.authButton}
+          />
+          <Button
+            title="Назад"
+            onPress={() => navigation.goBack()}
+            variant="outline"
+            style={styles.cancelButton}
+          />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView edges={['bottom']} style={styles.container}>
@@ -233,6 +282,31 @@ const styles = StyleSheet.create({
   },
   cancelButton: {
     marginTop: 12,
+  },
+  // Auth container styles
+  authContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 32,
+  },
+  authTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: COLORS.text,
+    marginTop: 16,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  authMessage: {
+    fontSize: 16,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  authButton: {
+    width: '100%',
+    marginBottom: 12,
   },
 });
 

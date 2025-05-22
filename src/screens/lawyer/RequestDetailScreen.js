@@ -31,22 +31,40 @@ const LawyerRequestDetailScreen = ({ route, navigation }) => {
   const [submitting, setSubmitting] = useState(false);
 
   const fetchRequestDetails = useCallback(async () => {
-    if (!user || !requestId) return;
+    if (!requestId) {
+      console.log('Нет requestId, прерываю загрузку');
+      setError('Идентификатор заявки не указан');
+      setLoading(false);
+      return;
+    }
     
+    console.log(`Начинаю загрузку заявки ID=${requestId}`);
     setLoading(true);
+    
     try {
-      const requestData = await RequestService.getRequestById(requestId, user.id, user.userType);
+      // Простой запрос без проверки авторизации
+      const requestData = await RequestService.getRequestById(requestId, user?.id, user?.userType);
+      
+      console.log('Получены данные заявки:', requestData.id, requestData.title);
+      
+      if (!requestData) {
+        throw new Error('Данные заявки не получены');
+      }
+      
       setRequest(requestData);
       
-      // Проверяем, оставил ли юрист отклик на эту заявку
-      const hasLawyerResponded = requestData.responses && 
-        requestData.responses.some(resp => resp.lawyer_id === user.id);
+      // Проверяем, оставил ли юрист отклик на эту заявку (только если пользователь авторизован)
+      if (user) {
+        const hasLawyerResponded = requestData.responses && 
+          requestData.responses.some(resp => resp.lawyer_id === user.id);
+        
+        setHasResponded(hasLawyerResponded);
+      }
       
-      setHasResponded(hasLawyerResponded);
       setError(null);
     } catch (err) {
-      console.error('Error fetching request details:', err);
-      setError('Не удалось загрузить детали заявки.');
+      console.error('Ошибка при загрузке деталей заявки:', err);
+      setError('Не удалось загрузить детали заявки. Попробуйте еще раз.');
     } finally {
       setLoading(false);
     }
@@ -67,23 +85,38 @@ const LawyerRequestDetailScreen = ({ route, navigation }) => {
     
     setSubmitting(true);
     try {
-      await RequestService.createResponse({
+      const userData = {
+        lawyer_id: user?.id || 999, // Если пользователь не авторизован, используем гостевой ID
         request_id: requestId,
-        lawyer_id: user.id,
         message: responseMessage,
-      });
+        lawyer_name: user?.username || 'Вы (Гость)',
+        specialization: user?.specialization || 'Юрист',
+        experience: user?.experience || 0,
+        rating: user?.rating || 0
+      };
+      
+      // Получаем созданный отклик
+      const newResponse = await RequestService.createResponse(userData);
+      
+      // Добавляем наш отклик в начало списка откликов
+      const updatedRequest = {
+        ...request,
+        responses: [newResponse, ...(request.responses || [])],
+        response_count: ((request.response_count || 0) + 1)
+      };
+      
+      // Обновляем состояние
+      setRequest(updatedRequest);
+      setHasResponded(true);
+      setResponseMessage('');
       
       Alert.alert(
         'Успешно',
-        'Ваш отклик отправлен клиенту',
+        'Ваш отклик отправлен клиенту и добавлен в список откликов',
         [{ text: 'OK' }]
       );
-      
-      setHasResponded(true);
-      setResponseMessage('');
-      // Обновляем данные после отправки отклика
-      fetchRequestDetails();
     } catch (err) {
+      console.error('Ошибка при отправке отклика:', err);
       Alert.alert(
         'Ошибка',
         'Не удалось отправить отклик. Попробуйте еще раз.',
@@ -164,7 +197,7 @@ const LawyerRequestDetailScreen = ({ route, navigation }) => {
         <Text style={styles.responseFormTitle}>Ответить на заявку</Text>
         <TextInput
           style={styles.responseInput}
-          placeholder="Напишите сообщение клиенту..."
+          placeholder="Напишите сообщение клиенту. Опишите ваш опыт в данной области, предложите варианты решения проблемы, укажите примерную стоимость услуг."
           value={responseMessage}
           onChangeText={setResponseMessage}
           multiline
@@ -175,6 +208,11 @@ const LawyerRequestDetailScreen = ({ route, navigation }) => {
           onPress={handleSendResponse}
           disabled={submitting || !responseMessage.trim()}
         />
+        {!user && (
+          <Text style={styles.guestInfo}>
+            Вы отвечаете как гость. Для полноценного взаимодействия с клиентом рекомендуется авторизоваться.
+          </Text>
+        )}
       </View>
     );
   };
@@ -206,11 +244,17 @@ const LawyerRequestDetailScreen = ({ route, navigation }) => {
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <Card style={styles.requestCard}>
           <View style={styles.header}>
-            <View>
+            <View style={styles.headerContent}>
               <Text style={styles.title}>{request.title}</Text>
               <Text style={styles.date}>
                 {formatDate(request.created_at)}
               </Text>
+              {request.isUrgent && (
+                <View style={styles.urgentBadge}>
+                  <Ionicons name="flash" size={16} color={COLORS.white} />
+                  <Text style={styles.urgentText}>Срочно</Text>
+                </View>
+              )}
             </View>
             <View style={[styles.statusBadge, { backgroundColor: getStatusColor(request.status) + '20' }]}>
               <Text style={[styles.statusText, { color: getStatusColor(request.status) }]}>
@@ -226,13 +270,13 @@ const LawyerRequestDetailScreen = ({ route, navigation }) => {
             
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Область права:</Text>
-              <Text style={styles.detailValue}>{request.law_area}</Text>
+              <Text style={styles.detailValue}>{request.law_area_display || request.law_area}</Text>
             </View>
             
             {request.price_range && (
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>Бюджет:</Text>
-                <Text style={styles.detailValue}>{request.price_range}</Text>
+                <Text style={styles.detailValue}>{request.price_range_display || request.price_range}</Text>
               </View>
             )}
             
@@ -243,15 +287,116 @@ const LawyerRequestDetailScreen = ({ route, navigation }) => {
               </View>
             )}
             
+            {request.location && (
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Местоположение:</Text>
+                <Text style={styles.detailValue}>{request.location}</Text>
+              </View>
+            )}
+            
+            {request.deadline && (
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Срок выполнения:</Text>
+                <Text style={styles.detailValue}>{formatDate(request.deadline)}</Text>
+              </View>
+            )}
+            
+            {request.service_type && (
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Тип услуги:</Text>
+                <Text style={styles.detailValue}>{request.service_type}</Text>
+              </View>
+            )}
+            
+            {request.case_complexity && (
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Сложность дела:</Text>
+                <Text style={styles.detailValue}>{request.case_complexity}</Text>
+              </View>
+            )}
+            
             <Text style={styles.descriptionLabel}>Описание:</Text>
             <Text style={styles.description}>{request.description}</Text>
+            
+            {request.additional_info && (
+              <>
+                <Text style={styles.descriptionLabel}>Дополнительная информация:</Text>
+                <Text style={styles.description}>{request.additional_info}</Text>
+              </>
+            )}
+            
+            {request.documents && request.documents.length > 0 && (
+              <View style={styles.documentsSection}>
+                <Text style={styles.descriptionLabel}>Приложенные документы:</Text>
+                {request.documents.map(doc => (
+                  <View key={doc.id} style={styles.documentItem}>
+                    <Ionicons name="document-outline" size={20} color={COLORS.primary} />
+                    <Text style={styles.documentName}>{doc.name}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
           </View>
+          
+          {request.response_count > 0 && (
+            <View style={styles.responseStatsContainer}>
+              <Ionicons name="people-outline" size={18} color={COLORS.primary} />
+              <Text style={styles.responseStats}>
+                {request.response_count} {request.response_count === 1 ? 'юрист откликнулся' : 'юристов откликнулись'} на эту заявку
+              </Text>
+            </View>
+          )}
         </Card>
 
         {/* Форма отклика */}
         <Card style={styles.responseCard}>
           {renderResponseSection()}
         </Card>
+        
+        {/* Другие отклики */}
+        {request.responses && request.responses.length > 0 && (
+          <Card style={styles.otherResponsesCard}>
+            <Text style={styles.sectionTitle}>
+              {request.responses.some(r => r.isYourResponse) 
+                ? 'Ваш отклик и отклики других юристов' 
+                : 'Отклики юристов'
+              }
+            </Text>
+            {request.responses.map((response, index) => (
+              <View key={response.id} style={[
+                styles.otherResponseItem, 
+                index < request.responses.length - 1 && styles.withBottomBorder,
+                response.isYourResponse && styles.yourResponseItem
+              ]}>
+                <View style={styles.responseLawyerInfo}>
+                  <Text style={[
+                    styles.responseLawyerName,
+                    response.isYourResponse && styles.yourResponseText
+                  ]}>
+                    {response.isYourResponse ? 'Ваш отклик' : response.lawyer_name}
+                  </Text>
+                  <View style={styles.responseStats}>
+                    <Ionicons name="star" size={14} color="#FFD700" />
+                    <Text style={styles.responseRating}>{response.rating}</Text>
+                    <Text style={styles.responseExperience}>{response.experience} лет опыта</Text>
+                  </View>
+                  <Text style={styles.responseSpecialization}>{response.specialization}</Text>
+                </View>
+                <Text style={styles.responseMessage}>{response.message}</Text>
+                <View style={styles.responseDetails}>
+                  <Text style={styles.responsePrice}>{response.price}</Text>
+                  <Text style={styles.responseTime}>{response.response_time}</Text>
+                </View>
+                <Text style={styles.responseDate}>
+                  {response.isYourResponse 
+                    ? 'Вы откликнулись ' + formatRelativeTime(response.created_at)
+                    : 'Откликнулся ' + formatRelativeTime(response.created_at)
+                  }
+                </Text>
+              </View>
+            ))}
+          </Card>
+        )}
 
         <TouchableOpacity 
           style={styles.refreshButton}
@@ -306,6 +451,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
+  },
+  headerContent: {
+    flex: 1,
   },
   title: {
     fontSize: 20,
@@ -366,6 +514,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: COLORS.text,
     lineHeight: 24,
+    marginBottom: 16,
   },
   responseCard: {
     marginBottom: 24,
@@ -409,6 +558,127 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     marginLeft: 8,
   },
+  guestInfo: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    marginTop: 16,
+    textAlign: 'center',
+    fontStyle: 'italic',
+  },
+  urgentBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    backgroundColor: COLORS.error,
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    marginTop: 8,
+  },
+  urgentText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: COLORS.white,
+    marginLeft: 4,
+  },
+  responseStatsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.lightGrey,
+  },
+  responseStats: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    marginLeft: 8,
+  },
+  otherResponsesCard: {
+    marginBottom: 24,
+    padding: 16,
+  },
+  otherResponseItem: {
+    padding: 16,
+    backgroundColor: COLORS.background,
+    borderRadius: 8,
+    marginTop: 12,
+  },
+  withBottomBorder: {
+    marginBottom: 12,
+  },
+  responseLawyerInfo: {
+    marginBottom: 8,
+  },
+  responseLawyerName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: COLORS.text,
+  },
+  responseStats: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+    marginBottom: 4,
+  },
+  responseRating: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    marginLeft: 4,
+    marginRight: 12,
+  },
+  responseExperience: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+  },
+  responseSpecialization: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    fontStyle: 'italic',
+  },
+  responseMessage: {
+    fontSize: 15,
+    color: COLORS.text,
+    marginBottom: 12,
+    lineHeight: 22,
+  },
+  responseDetails: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  responsePrice: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: COLORS.primary,
+    marginRight: 16,
+  },
+  responseTime: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+  },
+  responseDate: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    fontStyle: 'italic',
+  },
+  documentsSection: {
+    marginTop: 12,
+    marginBottom: 16,
+  },
+  documentItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    padding: 8,
+    backgroundColor: COLORS.lightGrey + '30',
+    borderRadius: 8,
+  },
+  documentName: {
+    fontSize: 14,
+    color: COLORS.text,
+    marginLeft: 8,
+  },
   refreshButton: {
     backgroundColor: COLORS.primary,
     flexDirection: 'row',
@@ -425,6 +695,50 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     marginLeft: 8,
   },
+  yourResponseItem: {
+    backgroundColor: COLORS.primary + '10',
+    borderWidth: 1,
+    borderColor: COLORS.primary + '30',
+    borderLeftWidth: 4,
+    borderLeftColor: COLORS.primary,
+  },
+  yourResponseText: {
+    color: COLORS.primary,
+    fontWeight: 'bold',
+  },
 });
+
+// Форматирование относительного времени
+const formatRelativeTime = (dateString) => {
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffMs = now - date;
+  const diffSec = Math.floor(diffMs / 1000);
+  const diffMin = Math.floor(diffSec / 60);
+  const diffHour = Math.floor(diffMin / 60);
+  const diffDay = Math.floor(diffHour / 24);
+
+  if (diffSec < 60) {
+    return 'только что';
+  } else if (diffMin < 60) {
+    return `${diffMin} ${getDeclension(diffMin, ['минуту', 'минуты', 'минут'])} назад`;
+  } else if (diffHour < 24) {
+    return `${diffHour} ${getDeclension(diffHour, ['час', 'часа', 'часов'])} назад`;
+  } else if (diffDay < 7) {
+    return `${diffDay} ${getDeclension(diffDay, ['день', 'дня', 'дней'])} назад`;
+  } else {
+    return date.toLocaleDateString('ru-RU');
+  }
+};
+
+// Функция для правильного склонения слов
+const getDeclension = (number, titles) => {
+  const cases = [2, 0, 1, 1, 1, 2];
+  return titles[
+    number % 100 > 4 && number % 100 < 20
+      ? 2
+      : cases[number % 10 < 5 ? number % 10 : 5]
+  ];
+};
 
 export default LawyerRequestDetailScreen; 

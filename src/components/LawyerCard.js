@@ -1,14 +1,63 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import Card from './Card';
 import { COLORS } from '../constants';
 import ImageService from '../services/ImageService';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
+import { useAuth } from '../contexts/AuthContext';
+import ChatService from '../services/ChatService';
 
 const LawyerCard = ({ lawyer, onPress }) => {
+  const navigation = useNavigation();
+  const { user } = useAuth();
+
   if (!lawyer) {
     return null;
   }
+
+  // Handle message button press
+  const handleMessagePress = async () => {
+    if (!lawyer || !lawyer.user_id) {
+      Alert.alert(
+        'Ошибка',
+        'Не удалось определить адвоката для отправки сообщения',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+    
+    try {
+      // Определяем ID адвоката
+      const lawyerId = lawyer.user_id;
+      
+      // Если пользователь не авторизован, создаем временный ID для гостя
+      const guestId = "guest_" + Math.floor(Math.random() * 1000000);
+      const senderId = user ? user.id : guestId;
+      
+      // Отправляем первое сообщение и создаем чат
+      const firstMessage = "Здравствуйте! Меня интересует консультация по юридическому вопросу.";
+      const result = await ChatService.sendMessage(
+        senderId, 
+        lawyerId,
+        firstMessage
+      );
+      
+      // Переходим к экрану чата
+      navigation.navigate('ChatScreen', {
+        conversationId: result.conversationId,
+        title: lawyer.username || 'Адвокат',
+        guestId: !user ? senderId : null
+      });
+    } catch (err) {
+      console.error('Error creating chat:', err);
+      Alert.alert(
+        'Ошибка',
+        'Не удалось создать чат. Пожалуйста, попробуйте позже: ' + err.message,
+        [{ text: 'OK' }]
+      );
+    }
+  };
 
   // Generate star rating display
   const renderRating = (rating) => {
@@ -102,11 +151,24 @@ const LawyerCard = ({ lawyer, onPress }) => {
         )}
         
         <Card.Footer>
-          <Card.Badge 
-            text={lawyer.experience > 5 ? 'Опытный адвокат' : 'Адвокат'}
-            type={lawyer.rating >= 4 ? 'success' : 'default'}
-          />
-          <Text style={styles.contactInfo}>Подробнее</Text>
+          <View style={styles.footerContent}>
+            <Card.Badge 
+              text={lawyer.experience > 5 ? 'Опытный адвокат' : 'Адвокат'}
+              type={lawyer.rating >= 4 ? 'success' : 'default'}
+            />
+            
+            <View style={styles.actionsContainer}>
+              <TouchableOpacity 
+                style={styles.messageButton} 
+                onPress={handleMessagePress}
+              >
+                <Ionicons name="chatbubble-outline" size={16} color={COLORS.primary} />
+                <Text style={styles.messageButtonText}>Написать</Text>
+              </TouchableOpacity>
+              
+              <Text style={styles.contactInfo}>Подробнее</Text>
+            </View>
+          </View>
         </Card.Footer>
       </Card>
     </TouchableOpacity>
@@ -170,6 +232,33 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     marginTop: 8,
     marginBottom: 16,
+  },
+  footerContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    width: '100%',
+  },
+  actionsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  messageButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.background,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 16,
+    marginRight: 10,
+    borderWidth: 1,
+    borderColor: COLORS.primary,
+  },
+  messageButtonText: {
+    color: COLORS.primary,
+    fontSize: 12,
+    fontWeight: 'bold',
+    marginLeft: 4,
   },
   contactInfo: {
     color: COLORS.primary,

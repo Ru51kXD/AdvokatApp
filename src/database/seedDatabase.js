@@ -1,4 +1,4 @@
-import { getDatabase } from './database';
+import { getDatabase, executeQuery } from './database';
 
 // Функция для проверки наличия адвокатов в базе и добавления их, если их нет
 export const ensureLawyersExist = async () => {
@@ -8,8 +8,11 @@ export const ensureLawyersExist = async () => {
     
     // Проверяем количество адвокатов
     try {
-      const result = await db.getFirstAsync('SELECT COUNT(*) as count FROM lawyers');
-      const count = result?.count || 0;
+      // Используем executeQuery вместо getFirstAsync, который может быть не определен
+      const results = await executeQuery('SELECT COUNT(*) as count FROM lawyers');
+      // Получаем первый результат из массива и его свойство count
+      const result = results && results.length > 0 ? results[0] : { count: 0 };
+      const count = result && typeof result.count !== 'undefined' ? Number(result.count) : 0;
       
       console.log(`В базе данных ${count} адвокатов`);
       
@@ -28,12 +31,13 @@ export const ensureLawyersExist = async () => {
       }
       
       // Проверяем количество отзывов
-      const reviewsResult = await db.getFirstAsync('SELECT COUNT(*) as count FROM reviews');
-      const reviewsCount = reviewsResult?.count || 0;
+      const reviewsResults = await executeQuery('SELECT COUNT(*) as count FROM reviews');
+      const reviewsResult = reviewsResults && reviewsResults.length > 0 ? reviewsResults[0] : { count: 0 };
+      const reviewsCount = reviewsResult && typeof reviewsResult.count !== 'undefined' ? Number(reviewsResult.count) : 0;
       
       if (reviewsCount < count * 5) {
         console.log('Добавление отзывов для адвокатов...');
-        await db.execAsync('DELETE FROM reviews');
+        await executeQuery('DELETE FROM reviews');
         await addReviewsForLawyers(db);
       }
       
@@ -56,9 +60,10 @@ export const ensureLawyersExist = async () => {
 // Очищаем существующие данные
 const clearExistingData = async (db) => {
   try {
-    await db.execAsync('DELETE FROM reviews');
-    await db.execAsync('DELETE FROM lawyers');
-    await db.execAsync('DELETE FROM users WHERE user_type = "lawyer"');
+    // Используем executeQuery вместо execAsync
+    await executeQuery('DELETE FROM reviews');
+    await executeQuery('DELETE FROM lawyers');
+    await executeQuery('DELETE FROM users WHERE user_type = "lawyer"');
     console.log('Данные очищены');
   } catch (error) {
     console.error('Ошибка при очистке данных:', error);
@@ -161,12 +166,23 @@ const addOptimizedLawyerSet = async (db) => {
         VALUES (?, ?, ?, ?, ?)
       `;
       
-      const userResult = await db.runAsync(
+      // Вместо db.runAsync используем executeQuery
+      await executeQuery(
         userInsertQuery,
         [name.fullName, email, 'password123', phone, 'lawyer']
       );
       
-      const userId = userResult.lastInsertRowId;
+      // Получаем ID созданного пользователя
+      const newUsers = await executeQuery(
+        'SELECT id FROM users WHERE email = ? LIMIT 1',
+        [email]
+      );
+      
+      if (!newUsers || newUsers.length === 0) {
+        throw new Error('Не удалось создать пользователя для адвоката');
+      }
+      
+      const userId = newUsers[0].id;
       
       // Создаем запись адвоката
       const lawyerInsertQuery = `
@@ -174,7 +190,7 @@ const addOptimizedLawyerSet = async (db) => {
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `;
       
-      await db.runAsync(
+      await executeQuery(
         lawyerInsertQuery,
         [userId, specialization, experience, priceRange, bio, city, address, rating]
       );
@@ -222,7 +238,7 @@ const addOptimizedLawyerSet = async (db) => {
 const addReviewsForLawyers = async (db) => {
   try {
     // Получаем список всех адвокатов
-    const lawyers = await db.getAllAsync('SELECT id FROM lawyers');
+    const lawyers = await executeQuery('SELECT id FROM lawyers');
     
     if (!lawyers || lawyers.length === 0) {
       console.log('Нет адвокатов для добавления отзывов');
@@ -230,7 +246,7 @@ const addReviewsForLawyers = async (db) => {
     }
     
     // Получаем список существующих клиентов (не адвокатов)
-    let clients = await db.getAllAsync('SELECT id FROM users WHERE user_type = "client" LIMIT 20');
+    let clients = await executeQuery('SELECT id FROM users WHERE user_type = "client" LIMIT 20');
     
     // Если клиентов мало, создаем новых с гарантированно уникальными email
     if (!clients || clients.length < 10) {
@@ -255,14 +271,16 @@ const addReviewsForLawyers = async (db) => {
         
         try {
           // Проверяем, существует ли пользователь с таким email
-          const existingUser = await db.getFirstAsync('SELECT id FROM users WHERE email = ?', [email]);
+          const existingUsers = await executeQuery('SELECT id FROM users WHERE email = ?', [email]);
+          const existingUser = existingUsers && existingUsers.length > 0 ? existingUsers[0] : null;
           
           if (existingUser && existingUser.id) {
             console.log(`Клиент с email ${email} уже существует, пропускаем...`);
             continue;
           }
           
-          const result = await db.runAsync(
+          // Вставляем нового клиента
+          await executeQuery(
             'INSERT INTO users (username, email, password, phone, user_type) VALUES (?, ?, ?, ?, ?)',
             [
               fullName, 
@@ -279,7 +297,7 @@ const addReviewsForLawyers = async (db) => {
       }
       
       // Получаем созданных клиентов
-      clients = await db.getAllAsync('SELECT id FROM users WHERE user_type = "client"');
+      clients = await executeQuery('SELECT id FROM users WHERE user_type = "client"');
       
       if (!clients || clients.length === 0) {
         console.error('Не удалось создать клиентов для отзывов');
@@ -322,10 +340,13 @@ const addReviewsForLawyers = async (db) => {
     const getRandomInt = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
     
     // Сначала проверим, есть ли уже отзывы
-    const existingReviewsCount = await db.getFirstAsync('SELECT COUNT(*) as count FROM reviews');
-    if (existingReviewsCount && existingReviewsCount.count > 0) {
-      console.log(`В базе уже есть ${existingReviewsCount.count} отзывов, пропускаем...`);
-      return { success: true, count: existingReviewsCount.count };
+    const reviewsResults = await executeQuery('SELECT COUNT(*) as count FROM reviews');
+    const reviewCount = reviewsResults && reviewsResults.length > 0 ? 
+                      Number(reviewsResults[0].count) : 0;
+                          
+    if (reviewCount > 0) {
+      console.log(`В базе уже есть ${reviewCount} отзывов, пропускаем...`);
+      return { success: true, count: reviewCount };
     }
     
     let addedReviewsCount = 0;
@@ -344,12 +365,12 @@ const addReviewsForLawyers = async (db) => {
           const clientId = clients[getRandomInt(0, clients.length - 1)].id;
           
           // Проверяем, оставлял ли этот клиент уже отзыв данному адвокату
-          const existingReview = await db.getFirstAsync(
+          const existingReviews = await executeQuery(
             'SELECT id FROM reviews WHERE lawyer_id = ? AND client_id = ?',
             [lawyerId, clientId]
           );
           
-          if (existingReview && existingReview.id) {
+          if (existingReviews && existingReviews.length > 0) {
             // Если отзыв уже есть, пропускаем
             continue;
           }
@@ -375,7 +396,7 @@ const addReviewsForLawyers = async (db) => {
           
           try {
             // Добавляем отзыв
-            await db.runAsync(
+            await executeQuery(
               'INSERT INTO reviews (lawyer_id, client_id, rating, comment, created_at) VALUES (?, ?, ?, ?, ?)',
               [lawyerId, clientId, rating, comment, dateStr]
             );
@@ -391,17 +412,20 @@ const addReviewsForLawyers = async (db) => {
       
       // Обновляем средний рейтинг адвоката
       try {
-        const avgRating = await db.getFirstAsync(
+        const avgRatingResults = await executeQuery(
           'SELECT AVG(rating) as avg_rating FROM reviews WHERE lawyer_id = ?',
           [lawyerId]
         );
         
-        if (avgRating && avgRating.avg_rating) {
-          await db.runAsync(
+        const avgRatingResult = avgRatingResults && avgRatingResults.length > 0 ? 
+                             avgRatingResults[0] : null;
+                                 
+        if (avgRatingResult && avgRatingResult.avg_rating) {
+          await executeQuery(
             'UPDATE lawyers SET rating = ? WHERE id = ?',
-            [Number(avgRating.avg_rating).toFixed(1), lawyerId]
+            [Number(avgRatingResult.avg_rating).toFixed(1), lawyerId]
           );
-          console.log(`Обновлен рейтинг для адвоката ID ${lawyerId}: ${Number(avgRating.avg_rating).toFixed(1)}`);
+          console.log(`Обновлен рейтинг для адвоката ID ${lawyerId}: ${Number(avgRatingResult.avg_rating).toFixed(1)}`);
         }
       } catch (error) {
         console.error(`Ошибка при обновлении рейтинга для адвоката ${lawyerId}:`, error);

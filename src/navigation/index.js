@@ -2,6 +2,7 @@ import React from 'react';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
+import { Text, View } from 'react-native';
 
 // Auth screens
 import WelcomeScreen from '../screens/WelcomeScreen';
@@ -27,8 +28,15 @@ import ConversationsScreen from '../screens/chat/ConversationsScreen';
 import ChatScreen from '../screens/chat/ChatScreen';
 import NewChatScreen from '../screens/chat/NewChatScreen';
 
-// Admin screen
-import AdminScreen from '../screens/admin/AdminScreen';
+// Help screen
+import HelpScreen from '../screens/HelpScreen';
+
+// Admin screen placeholder
+const AdminScreen = ({ route }) => (
+  <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+    <Text>Панель администратора (в разработке)</Text>
+  </View>
+);
 
 // Context
 import { useAuth } from '../contexts/AuthContext';
@@ -52,12 +60,14 @@ const ClientTabs = () => (
           iconName = focused ? 'chatbubbles' : 'chatbubbles-outline';
         } else if (route.name === 'ProfileTab') {
           iconName = focused ? 'person' : 'person-outline';
+        } else if (route.name === 'HelpTab') {
+          iconName = focused ? 'help-circle' : 'help-circle-outline';
         }
 
         return <Ionicons name={iconName} size={size} color={color} />;
       },
       tabBarActiveTintColor: COLORS.primary,
-      tabBarInactiveTintColor: COLORS.grey,
+      tabBarInactiveTintColor: COLORS.gray,
     })}
   >
     <Tab.Screen 
@@ -74,6 +84,11 @@ const ClientTabs = () => (
       name="ChatsTab" 
       component={ChatScreenStack} 
       options={{ headerShown: false, title: 'Чаты' }} 
+    />
+    <Tab.Screen 
+      name="HelpTab" 
+      component={HelpScreen} 
+      options={{ title: 'Помощь' }} 
     />
     <Tab.Screen 
       name="ProfileTab" 
@@ -124,25 +139,67 @@ const LawyerTabs = () => (
         return <Ionicons name={iconName} size={size} color={color} />;
       },
       tabBarActiveTintColor: COLORS.primary,
-      tabBarInactiveTintColor: COLORS.grey,
+      tabBarInactiveTintColor: COLORS.gray,
+      tabBarStyle: {
+        backgroundColor: COLORS.white,
+        elevation: 10,
+        shadowColor: COLORS.primary,
+        shadowOffset: { width: 0, height: -3 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        borderTopWidth: 1,
+        borderTopColor: COLORS.lightGray,
+        height: 60,
+        paddingBottom: 8,
+      },
+      tabBarLabelStyle: {
+        fontSize: 12,
+        fontWeight: '500',
+      },
     })}
   >
     <Tab.Screen 
-      name="RequestsTab" 
-      component={LawyerRequestsScreenStack} 
-      options={{ headerShown: false, title: 'Заявки' }} 
-    />
-    <Tab.Screen 
       name="ChatsTab" 
       component={ChatScreenStack} 
-      options={{ headerShown: false, title: 'Чаты' }} 
+      options={{ 
+        headerShown: false, 
+        title: 'Чаты',
+        tabBarBadge: 3, // Demo badge to make app look alive
+      }} 
+    />
+    <Tab.Screen 
+      name="RequestsTab" 
+      component={LawyerRequestsScreenStack} 
+      options={{ 
+        headerShown: false, 
+        title: 'Заявки клиентов',
+        tabBarBadge: 5, // Demo badge to make app look alive
+      }} 
     />
     <Tab.Screen 
       name="ProfileTab" 
-      component={LawyerProfileScreen} 
+      component={LawyerProfileStack} 
       options={{ headerShown: false, title: 'Профиль' }} 
     />
   </Tab.Navigator>
+);
+
+// Lawyer profile stack
+const LawyerProfileStack = () => (
+  <Stack.Navigator
+    screenOptions={{
+      headerStyle: {
+        backgroundColor: COLORS.primary,
+      },
+      headerTintColor: COLORS.white,
+    }}
+  >
+    <Stack.Screen 
+      name="Profile" 
+      component={LawyerProfileScreen} 
+      options={{ title: 'Профиль' }} 
+    />
+  </Stack.Navigator>
 );
 
 // Chat screen stack (shared between client and lawyer)
@@ -163,7 +220,7 @@ const ChatScreenStack = () => (
     <Stack.Screen 
       name="ChatScreen" 
       component={ChatScreen} 
-      options={({ route }) => ({ title: route.params.title })} 
+      options={({ route }) => ({ title: route.params?.title || 'Чат' })} 
     />
     <Stack.Screen 
       name="NewChatScreen" 
@@ -206,7 +263,7 @@ const SearchScreenStack = () => (
     <Stack.Screen 
       name="ChatScreen" 
       component={ChatScreen} 
-      options={({ route }) => ({ title: route.params.title })} 
+      options={({ route }) => ({ title: route.params?.title || 'Чат' })} 
     />
   </Stack.Navigator>
 );
@@ -239,7 +296,7 @@ const ClientRequestsScreenStack = () => (
     <Stack.Screen 
       name="ChatScreen" 
       component={ChatScreen} 
-      options={({ route }) => ({ title: route.params.title })} 
+      options={({ route }) => ({ title: route.params?.title || 'Чат' })} 
     />
   </Stack.Navigator>
 );
@@ -267,7 +324,7 @@ const LawyerRequestsScreenStack = () => (
     <Stack.Screen 
       name="ChatScreen" 
       component={ChatScreen} 
-      options={({ route }) => ({ title: route.params.title })} 
+      options={({ route }) => ({ title: route.params?.title || 'Чат' })} 
     />
   </Stack.Navigator>
 );
@@ -300,17 +357,19 @@ const AuthStack = () => (
   </Stack.Navigator>
 );
 
-export default function AppNavigation() {
-  const { user, isLoading } = useAuth();
+const AppNavigation = () => {
+  const { authState, isLoading } = useAuth();
   
   if (isLoading) {
-    return null; // Or a loading component
+    return null; // Или компонент загрузки
   }
 
   // Возвращаем только нужный стек навигации без NavigationContainer
-  return user ? (
-    user.userType === 'lawyer' ? <LawyerTabs /> : <ClientTabs />
+  return authState?.user ? (
+    authState.user.user_type === 'lawyer' ? <LawyerTabs /> : <ClientTabs />
   ) : (
     <AuthStack />
   );
-} 
+};
+
+export default AppNavigation; 
