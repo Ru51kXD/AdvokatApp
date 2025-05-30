@@ -1,10 +1,11 @@
-import React, { createContext, useState, useContext, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Alert } from 'react-native';
-import { 
-  getUsers, 
-  createUser 
+import {
+    createUser,
+    getUsers
 } from '../database/database';
+import { LawyerService } from '../services/LawyerService';
 
 // Создаем контекст
 const AuthContext = createContext();
@@ -23,6 +24,26 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     const loadUser = async () => {
       try {
+        // Инициализируем базу данных и обновляем имена адвокатов
+        try {
+          await initDatabase();
+          console.log('База данных инициализирована');
+          
+          // Автоматически обновляем имена адвокатов при запуске
+          setTimeout(async () => {
+            try {
+              const result = await LawyerService.updateLawyerNamesInDB();
+              if (result.success && result.updated > 0) {
+                console.log(`Автоматически обновлено ${result.updated} имен адвокатов`);
+              }
+            } catch (updateError) {
+              console.log('Не удалось автоматически обновить имена адвокатов:', updateError);
+            }
+          }, 1000); // Задержка в 1 секунду для завершения инициализации
+        } catch (dbError) {
+          console.error('Ошибка инициализации базы данных:', dbError);
+        }
+        
         // Проверяем, сохранен ли пользователь в AsyncStorage
         const userJSON = await AsyncStorage.getItem('user');
         console.log('AuthContext: Checking for stored user', userJSON ? 'Found user data' : 'No user data found');

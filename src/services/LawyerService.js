@@ -73,12 +73,18 @@ export const LawyerService = {
         // Make sure we have a valid db instance
         await getDatabase();
         
-        // Автоматически обновляем имена адвокатов если они одинаковые
+        // Сначала проверим и обновим имена адвокатов
         try {
-          const checkResult = await executeQuery('SELECT COUNT(DISTINCT u.username) as unique_count, COUNT(*) as total_count FROM lawyers l JOIN users u ON l.user_id = u.id WHERE u.user_type = "lawyer"');
-          if (checkResult && checkResult[0] && checkResult[0].unique_count < checkResult[0].total_count / 2) {
-            console.log('Обнаружены дублирующиеся имена адвокатов, обновляем...');
-            await LawyerService.updateLawyerNames();
+          console.log('Проверяем имена адвокатов...');
+          const checkResult = await executeQuery('SELECT u.username, COUNT(*) as count FROM lawyers l JOIN users u ON l.user_id = u.id WHERE u.user_type = "lawyer" GROUP BY u.username ORDER BY count DESC LIMIT 5');
+          
+          if (checkResult && checkResult.length > 0) {
+            // Если есть имена, которые повторяются больше 1 раза, обновляем
+            const duplicates = checkResult.filter(r => r.count > 1);
+            if (duplicates.length > 0) {
+              console.log('Найдены дублирующиеся имена адвокатов:', duplicates.map(d => `${d.username} (${d.count} раз)`));
+              await LawyerService.updateLawyerNamesInDB();
+            }
           }
         } catch (updateError) {
           console.log('Не удалось автоматически обновить имена адвокатов:', updateError);
@@ -617,6 +623,57 @@ export const LawyerService = {
       return { success: true, updated: updateCount };
     } catch (error) {
       console.error('Ошибка при обновлении имен адвокатов:', error);
+      throw error;
+    }
+  },
+
+  // Функция для обновления имен адвокатов в базе данных
+  updateLawyerNamesInDB: async () => {
+    try {
+      console.log('Обновляем имена адвокатов в базе данных...');
+      
+      // Список казахстанских имен для адвокатов
+      const lawyerNames = [
+        'Айдар Нурланов', 'Динара Касымова', 'Асель Сериков', 'Ержан Мусин',
+        'Гульнара Алимова', 'Марат Джумабаев', 'Айжан Бектурова', 'Самал Сарсенов',
+        'Руслан Ахметов', 'Зарина Искакова', 'Азат Токаев', 'Сауле Манапова',
+        'Аслан Шамшиев', 'Гульназ Турсунов', 'Санжар Назаров', 'Айнур Громова',
+        'Даулет Имангалиев', 'Ерлан Степанов', 'Бахыт Комарова', 'Алмас Орлова',
+        'Жанар Кузнецов', 'Мейрам Лебедев', 'Анара Зайцева', 'Нуржан Федорова',
+        'Кайрат Васильева', 'Арман Макаров', 'Лейла Петрова', 'Максат Соколов',
+        'Болат Сатбаев', 'Айгуль Нурпеисова', 'Ерболат Калиев', 'Мадина Утегенова'
+      ];
+      
+      // Получаем всех пользователей-адвокатов
+      const lawyerUsers = await executeQuery('SELECT u.id, u.username FROM users u JOIN lawyers l ON u.id = l.user_id WHERE u.user_type = "lawyer"');
+      
+      if (!lawyerUsers || lawyerUsers.length === 0) {
+        console.log('Адвокаты не найдены в базе данных');
+        return { success: false, message: 'Адвокаты не найдены' };
+      }
+      
+      let updateCount = 0;
+      
+      // Обновляем имена адвокатов
+      for (let i = 0; i < lawyerUsers.length; i++) {
+        const lawyerUser = lawyerUsers[i];
+        const newName = lawyerNames[i % lawyerNames.length];
+        
+        if (lawyerUser.username !== newName) {
+          try {
+            await executeQuery('UPDATE users SET username = ? WHERE id = ?', [newName, lawyerUser.id]);
+            updateCount++;
+            console.log(`Обновлено имя адвоката ID ${lawyerUser.id}: ${lawyerUser.username} -> ${newName}`);
+          } catch (updateError) {
+            console.error(`Ошибка при обновлении адвоката ID ${lawyerUser.id}:`, updateError);
+          }
+        }
+      }
+      
+      console.log(`Успешно обновлено ${updateCount} имен адвокатов`);
+      return { success: true, updated: updateCount };
+    } catch (error) {
+      console.error('Ошибка при обновлении имен адвокатов в базе данных:', error);
       throw error;
     }
   }
