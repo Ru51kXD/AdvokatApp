@@ -1,23 +1,23 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { 
-  View, 
-  StyleSheet, 
-  ScrollView, 
-  Text, 
-  ActivityIndicator,
-  Alert,
-  TouchableOpacity,
+import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
+import React, { useCallback, useState } from 'react';
+import {
+    ActivityIndicator,
+    Alert,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect } from '@react-navigation/native';
-import { Ionicons } from '@expo/vector-icons';
 
-import { COLORS, REQUEST_STATUS } from '../../constants';
-import Card from '../../components/Card';
 import Button from '../../components/Button';
+import Card from '../../components/Card';
 import ResponseCard from '../../components/ResponseCard';
-import { RequestService } from '../../services/RequestService';
+import { COLORS, REQUEST_STATUS, RESPONSE_STATUS } from '../../constants';
 import { useAuth } from '../../contexts/AuthContext';
+import { RequestService } from '../../services/RequestService';
 
 const RequestDetailScreen = ({ route, navigation }) => {
   const { requestId } = route.params;
@@ -287,7 +287,19 @@ const RequestDetailScreen = ({ route, navigation }) => {
             <ResponseCard
               key={response.id}
               response={response}
-              onPress={() => handleViewLawyerProfile({ id: response.lawyer_id })}
+              onPress={(responseData) => {
+                // Если отклик принят, переходим в чат
+                if (response.status === RESPONSE_STATUS.ACCEPTED) {
+                  navigation.navigate('ChatScreen', {
+                    lawyerId: response.lawyer_id, 
+                    title: response.lawyer_name || 'Юрист',
+                    requestId: request.id
+                  });
+                } else {
+                  // Иначе переходим к профилю юриста
+                  handleViewLawyerProfile({ id: response.lawyer_id });
+                }
+              }}
               onAccept={() => handleAcceptResponse(response.id)}
               onReject={() => handleRejectResponse(response.id)}
               isClient={true}

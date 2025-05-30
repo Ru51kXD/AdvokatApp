@@ -11,6 +11,9 @@ import Picker from '../../components/Picker';
 import { useAuth } from '../../contexts/AuthContext';
 import { LawyerService } from '../../services/LawyerService';
 import { RequestService } from '../../services/RequestService';
+import ImageService from '../../services/ImageService';
+import UserAvatar from '../../components/UserAvatar';
+import AvatarPickerModal from '../../components/AvatarPickerModal';
 
 const LawyerProfileScreen = ({ navigation }) => {
   const { authState, signOut } = useAuth();
@@ -27,6 +30,12 @@ const LawyerProfileScreen = ({ navigation }) => {
     address: '',
   });
   
+  // Avatar state
+  const [hasAvatar, setHasAvatar] = useState(false);
+  const [isAvatarPickerVisible, setIsAvatarPickerVisible] = useState(false);
+  const [isAvatarLoading, setIsAvatarLoading] = useState(false);
+  const [avatarKey, setAvatarKey] = useState(0); // For forcing avatar updates
+  
   // Stats data for dashboard
   const [stats, setStats] = useState({
     totalClients: 0,
@@ -35,6 +44,18 @@ const LawyerProfileScreen = ({ navigation }) => {
     responseRate: 0,
     reviewCount: 0
   });
+
+  // Check for existing avatar
+  useEffect(() => {
+    const checkAvatar = async () => {
+      if (authState?.user?.id) {
+        const result = await ImageService.getUserAvatar(authState.user.id);
+        setHasAvatar(result.success);
+      }
+    };
+    
+    checkAvatar();
+  }, [authState?.user?.id]);
 
   const loadProfile = useCallback(async () => {
     if (!authState.user) return;
@@ -173,6 +194,85 @@ const LawyerProfileScreen = ({ navigation }) => {
   const handleSupport = () => {
     navigation.navigate('Support');
   };
+  
+  // Avatar handlers
+  const handleAvatarPress = () => {
+    setIsAvatarPickerVisible(true);
+  };
+  
+  const handlePickImage = async () => {
+    setIsAvatarPickerVisible(false);
+    setIsAvatarLoading(true);
+    
+    try {
+      const result = await ImageService.pickImage();
+      
+      if (result.success && result.image) {
+        const saveResult = await ImageService.saveUserAvatar(authState.user.id, result.image);
+        
+        if (saveResult.success) {
+          setHasAvatar(true);
+          setAvatarKey(prev => prev + 1); // Force avatar update
+          Alert.alert('Успешно', 'Аватар успешно обновлен');
+        } else {
+          Alert.alert('Ошибка', saveResult.error || 'Не удалось сохранить аватар');
+        }
+      }
+    } catch (error) {
+      console.error('Ошибка при выборе изображения:', error);
+      Alert.alert('Ошибка', 'Произошла ошибка при выборе изображения');
+    } finally {
+      setIsAvatarLoading(false);
+    }
+  };
+  
+  const handleTakePhoto = async () => {
+    setIsAvatarPickerVisible(false);
+    setIsAvatarLoading(true);
+    
+    try {
+      const result = await ImageService.takePhoto();
+      
+      if (result.success && result.image) {
+        const saveResult = await ImageService.saveUserAvatar(authState.user.id, result.image);
+        
+        if (saveResult.success) {
+          setHasAvatar(true);
+          setAvatarKey(prev => prev + 1); // Force avatar update
+          Alert.alert('Успешно', 'Аватар успешно обновлен');
+        } else {
+          Alert.alert('Ошибка', saveResult.error || 'Не удалось сохранить аватар');
+        }
+      }
+    } catch (error) {
+      console.error('Ошибка при съемке фото:', error);
+      Alert.alert('Ошибка', 'Произошла ошибка при съемке фото');
+    } finally {
+      setIsAvatarLoading(false);
+    }
+  };
+  
+  const handleRemoveAvatar = async () => {
+    setIsAvatarPickerVisible(false);
+    setIsAvatarLoading(true);
+    
+    try {
+      const result = await ImageService.removeUserAvatar(authState.user.id);
+      
+      if (result.success) {
+        setHasAvatar(false);
+        setAvatarKey(prev => prev + 1); // Force avatar update
+        Alert.alert('Успешно', 'Аватар успешно удален');
+      } else {
+        Alert.alert('Ошибка', result.error || 'Не удалось удалить аватар');
+      }
+    } catch (error) {
+      console.error('Ошибка при удалении аватара:', error);
+      Alert.alert('Ошибка', 'Произошла ошибка при удалении аватара');
+    } finally {
+      setIsAvatarLoading(false);
+    }
+  };
 
   if (loading && !profileData) {
     return (
@@ -196,15 +296,22 @@ const LawyerProfileScreen = ({ navigation }) => {
       <ScrollView contentContainerStyle={styles.content}>
         {/* Профиль юриста */}
         <View style={styles.profileHeader}>
-          <View style={styles.avatarContainer}>
-            <Image 
-              source={require('../../../assets/images/icon.png')} 
+          {isAvatarLoading ? (
+            <View style={styles.avatarLoaderContainer}>
+              <ActivityIndicator size="large" color={COLORS.primary} />
+            </View>
+          ) : (
+            <UserAvatar
+              key={avatarKey}
+              userId={authState?.user?.id}
+              username={authState?.user?.username || 'Адвокат'}
+              size={80}
+              isLawyer={true}
+              showEditButton={!isEditing}
+              onEditPress={handleAvatarPress}
               style={styles.avatar}
             />
-            <TouchableOpacity style={styles.editAvatarButton}>
-              <Ionicons name="camera" size={20} color={COLORS.white} />
-            </TouchableOpacity>
-          </View>
+          )}
           
           <View style={styles.profileInfo}>
             <Text style={styles.name}>{authState.user?.username || 'Адвокат'}</Text>
@@ -248,227 +355,221 @@ const LawyerProfileScreen = ({ navigation }) => {
                 <Text style={styles.statLabel}>Активных заявок</Text>
               </View>
               <View style={styles.statCard}>
-                <Text style={styles.statValue}>{stats.reviewCount}</Text>
-                <Text style={styles.statLabel}>Отзывов</Text>
+                <Text style={styles.statValue}>{stats.responseRate}%</Text>
+                <Text style={styles.statLabel}>Отклик</Text>
               </View>
             </View>
             
             <View style={styles.earningsCard}>
               <View>
-                <Text style={styles.earningsLabel}>Общий заработок</Text>
+                <Text style={styles.earningsLabel}>Заработано за месяц</Text>
                 <Text style={styles.earningsValue}>{formattedEarnings}</Text>
               </View>
-              <View style={styles.responseRateContainer}>
-                <Text style={styles.responseRateLabel}>Скорость отклика</Text>
-                <View style={styles.responseRateBar}>
-                  <View style={[styles.responseRateFill, { width: `${stats.responseRate}%` }]} />
-                </View>
-                <Text style={styles.responseRateValue}>{stats.responseRate}%</Text>
-              </View>
+              <Ionicons name="trending-up" size={24} color={COLORS.success} />
             </View>
             
-            <View style={styles.quickActionsContainer}>
-              <TouchableOpacity 
-                style={styles.quickActionButton}
-                onPress={() => navigation.navigate('RequestsTab')}
-              >
-                <Ionicons name="briefcase-outline" size={24} color={COLORS.primary} />
-                <Text style={styles.quickActionText}>Заявки</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity 
-                style={styles.quickActionButton}
-                onPress={() => navigation.navigate('ChatsTab')}
-              >
-                <Ionicons name="chatbubbles-outline" size={24} color={COLORS.primary} />
-                <Text style={styles.quickActionText}>Чаты</Text>
-                <View style={styles.notificationBadge}>
-                  <Text style={styles.notificationText}>3</Text>
-                </View>
+            <View style={styles.reviewsRow}>
+              <Text style={styles.reviewsText}>
+                <Text style={styles.reviewsCount}>{stats.reviewCount}</Text> отзывов
+              </Text>
+              <TouchableOpacity style={styles.viewReviewsButton}>
+                <Text style={styles.viewReviewsText}>Посмотреть все</Text>
+                <Ionicons name="chevron-forward" size={16} color={COLORS.primary} />
               </TouchableOpacity>
             </View>
           </View>
         )}
 
-        {/* Форма редактирования */}
+        {/* Форма редактирования профиля */}
         {isEditing ? (
-          <View style={styles.section}>
+          <View style={styles.formSection}>
             <Text style={styles.sectionTitle}>Редактирование профиля</Text>
             
+            <Text style={styles.inputLabel}>Специализация</Text>
             <Picker
-              label="Специализация"
-              placeholder="Выберите вашу специализацию"
-              items={LAW_AREAS}
-              value={formData.specialization}
+              selectedValue={formData.specialization}
               onValueChange={(value) => handleInputChange('specialization', value)}
+              items={LAW_AREAS}
+              placeholder="Выберите специализацию"
             />
             
+            <Text style={styles.inputLabel}>Опыт работы (лет)</Text>
             <Input
-              label="Опыт работы (лет)"
-              placeholder="Укажите ваш опыт в годах"
               value={formData.experience}
               onChangeText={(value) => handleInputChange('experience', value)}
+              placeholder="Введите количество лет опыта"
               keyboardType="numeric"
             />
             
+            <Text style={styles.inputLabel}>Ценовой диапазон</Text>
             <Picker
-              label="Стоимость услуг"
-              placeholder="Выберите диапазон стоимости"
-              items={PRICE_RANGES}
-              value={formData.price_range}
+              selectedValue={formData.price_range}
               onValueChange={(value) => handleInputChange('price_range', value)}
+              items={PRICE_RANGES}
+              placeholder="Выберите ценовой диапазон"
             />
             
+            <Text style={styles.inputLabel}>Город</Text>
             <Picker
-              label="Город"
-              placeholder="Выберите город"
-              items={KAZAKHSTAN_CITIES}
-              value={formData.city}
+              selectedValue={formData.city}
               onValueChange={(value) => handleInputChange('city', value)}
+              items={KAZAKHSTAN_CITIES}
+              placeholder="Выберите город"
             />
             
+            <Text style={styles.inputLabel}>Адрес офиса</Text>
             <Input
-              label="Адрес"
-              placeholder="Укажите ваш рабочий адрес"
               value={formData.address}
               onChangeText={(value) => handleInputChange('address', value)}
+              placeholder="Введите адрес офиса"
             />
             
+            <Text style={styles.inputLabel}>О себе</Text>
             <Input
-              label="О себе"
-              placeholder="Расскажите о своей практике и опыте работы"
               value={formData.bio}
               onChangeText={(value) => handleInputChange('bio', value)}
+              placeholder="Расскажите о своем опыте, образовании и т.д."
               multiline
-              numberOfLines={4}
+              numberOfLines={5}
+              style={styles.textArea}
             />
             
-            <View style={styles.actionButtons}>
-              <Button
-                title="Сохранить"
-                onPress={handleSaveProfile}
-                style={styles.saveButton}
-                loading={loading}
-              />
+            <View style={styles.formButtons}>
               <Button
                 title="Отмена"
                 onPress={handleToggleEdit}
                 variant="outline"
                 style={styles.cancelButton}
               />
+              <Button
+                title="Сохранить"
+                onPress={handleSaveProfile}
+                style={styles.saveButton}
+              />
             </View>
           </View>
         ) : (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Информация профиля</Text>
-            
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Специализация:</Text>
-              <Text style={styles.infoValue}>{profileData?.specialization || 'Не указана'}</Text>
+          <>
+            {/* Информация о профиле */}
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Профессиональная информация</Text>
+              
+              <View style={styles.infoRow}>
+                <Text style={styles.infoLabel}>Специализация:</Text>
+                <Text style={styles.infoValue}>
+                  {profileData?.specialization || 'Не указано'}
+                </Text>
+              </View>
+              
+              {profileData?.experience > 0 && (
+                <View style={styles.infoRow}>
+                  <Text style={styles.infoLabel}>Опыт работы:</Text>
+                  <Text style={styles.infoValue}>
+                    {profileData.experience} {getYearText(profileData.experience)}
+                  </Text>
+                </View>
+              )}
+              
+              <View style={styles.infoRow}>
+                <Text style={styles.infoLabel}>Стоимость услуг:</Text>
+                <Text style={styles.infoValue}>
+                  {profileData?.price_range || 'Не указано'}
+                </Text>
+              </View>
+              
+              <View style={styles.infoRow}>
+                <Text style={styles.infoLabel}>Город:</Text>
+                <Text style={styles.infoValue}>
+                  {profileData?.city || 'Не указано'}
+                </Text>
+              </View>
+              
+              {profileData?.address && (
+                <View style={styles.infoRow}>
+                  <Text style={styles.infoLabel}>Адрес:</Text>
+                  <Text style={styles.infoValue}>{profileData.address}</Text>
+                </View>
+              )}
             </View>
             
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Опыт работы:</Text>
-              <Text style={styles.infoValue}>
-                {profileData?.experience ? `${profileData.experience} ${getYearText(profileData.experience)}` : 'Не указан'}
-              </Text>
-            </View>
-            
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Стоимость услуг:</Text>
-              <Text style={styles.infoValue}>{profileData?.price_range || 'Не указана'}</Text>
-            </View>
-            
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Город:</Text>
-              <Text style={styles.infoValue}>{profileData?.city || 'Не указан'}</Text>
-            </View>
-            
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Адрес:</Text>
-              <Text style={styles.infoValue}>{profileData?.address || 'Не указан'}</Text>
-            </View>
-            
+            {/* О себе */}
             {profileData?.bio && (
-              <View style={styles.bioContainer}>
-                <Text style={styles.bioLabel}>О себе:</Text>
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>О себе</Text>
                 <Text style={styles.bioText}>{profileData.bio}</Text>
               </View>
             )}
-          </View>
-        )}
-
-        {/* Настройки */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Настройки</Text>
-          
-          <View style={styles.settingRow}>
-            <View>
-              <Text style={styles.settingLabel}>Уведомления</Text>
-              <Text style={styles.settingDescription}>
-                Получать уведомления о новых заявках и сообщениях
-              </Text>
+            
+            {/* Настройки */}
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Настройки</Text>
+              
+              <View style={styles.settingItem}>
+                <View style={styles.settingLeft}>
+                  <Ionicons name="notifications-outline" size={20} color={COLORS.textSecondary} />
+                  <Text style={styles.settingText}>Уведомления</Text>
+                </View>
+                <Switch
+                  value={notificationsEnabled}
+                  onValueChange={handleToggleNotifications}
+                  trackColor={{ false: COLORS.lightGrey, true: COLORS.primary + '80' }}
+                  thumbColor={notificationsEnabled ? COLORS.primary : COLORS.grey}
+                />
+              </View>
+              
+              <TouchableOpacity style={styles.settingItem} onPress={handleBankDetails}>
+                <View style={styles.settingLeft}>
+                  <Ionicons name="card-outline" size={20} color={COLORS.textSecondary} />
+                  <Text style={styles.settingText}>Банковские реквизиты</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={COLORS.grey} />
+              </TouchableOpacity>
+              
+              <TouchableOpacity style={styles.settingItem} onPress={handlePrivacyAndSecurity}>
+                <View style={styles.settingLeft}>
+                  <Ionicons name="shield-checkmark-outline" size={20} color={COLORS.textSecondary} />
+                  <Text style={styles.settingText}>Приватность и безопасность</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={COLORS.grey} />
+              </TouchableOpacity>
+              
+              <TouchableOpacity style={styles.settingItem} onPress={handleSupport}>
+                <View style={styles.settingLeft}>
+                  <Ionicons name="help-circle-outline" size={20} color={COLORS.textSecondary} />
+                  <Text style={styles.settingText}>Поддержка</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={COLORS.grey} />
+              </TouchableOpacity>
             </View>
-            <Switch
-              value={notificationsEnabled}
-              onValueChange={handleToggleNotifications}
-              trackColor={{ false: COLORS.lightGray, true: COLORS.primary }}
-              thumbColor={COLORS.white}
+            
+            {/* Кнопка выхода */}
+            <Button 
+              title="Выйти из аккаунта"
+              onPress={handleLogout}
+              variant="outline"
+              color="error"
+              style={styles.logoutButton}
             />
-          </View>
-          
-          <TouchableOpacity 
-            style={styles.settingButton}
-            onPress={handlePrivacyAndSecurity}
-          >
-            <View style={styles.settingButtonContent}>
-              <Ionicons name="shield-checkmark-outline" size={22} color={COLORS.text} />
-              <Text style={styles.settingButtonText}>Приватность и безопасность</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={22} color={COLORS.text} />
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={styles.settingButton}
-            onPress={handleBankDetails}
-          >
-            <View style={styles.settingButtonContent}>
-              <Ionicons name="cash-outline" size={22} color={COLORS.text} />
-              <Text style={styles.settingButtonText}>Банковские реквизиты</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={22} color={COLORS.text} />
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={styles.settingButton}
-            onPress={handleSupport}
-          >
-            <View style={styles.settingButtonContent}>
-              <Ionicons name="help-circle-outline" size={22} color={COLORS.text} />
-              <Text style={styles.settingButtonText}>Поддержка</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={22} color={COLORS.text} />
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={[styles.settingButton, styles.logoutButton]}
-            onPress={handleLogout}
-          >
-            <View style={styles.settingButtonContent}>
-              <Ionicons name="log-out-outline" size={22} color={COLORS.error} />
-              <Text style={styles.logoutButtonText}>Выйти из аккаунта</Text>
-            </View>
-          </TouchableOpacity>
-        </View>
-        
-        <Text style={styles.versionText}>Версия приложения: 1.0.0</Text>
+          </>
+        )}
       </ScrollView>
+      
+      {/* Модальное окно выбора аватара */}
+      <AvatarPickerModal
+        visible={isAvatarPickerVisible}
+        onClose={() => setIsAvatarPickerVisible(false)}
+        onPickFromGallery={handlePickImage}
+        onTakePhoto={handleTakePhoto}
+        onRemoveAvatar={handleRemoveAvatar}
+        hasAvatar={hasAvatar}
+      />
     </SafeAreaView>
   );
 };
 
-// Helper function to get correct year text in Russian
+// Helper function to get correct year form in Russian
 const getYearText = (years) => {
+  years = Number(years);
   if (years === 1) return 'год';
   if (years > 1 && years < 5) return 'года';
   return 'лет';
@@ -481,6 +582,7 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 16,
+    paddingBottom: 32,
   },
   loadingContainer: {
     flex: 1,
@@ -495,54 +597,32 @@ const styles = StyleSheet.create({
   profileHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.white,
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
-    ...Platform.select({
-      ios: {
-        shadowColor: COLORS.black,
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-      },
-      android: {
-        elevation: 3,
-      },
-    }),
-  },
-  avatarContainer: {
-    position: 'relative',
-    marginRight: 16,
+    marginBottom: 24,
   },
   avatar: {
+    marginRight: 16,
+  },
+  avatarLoaderContainer: {
     width: 80,
     height: 80,
     borderRadius: 40,
-  },
-  editAvatarButton: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    backgroundColor: COLORS.primary,
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    backgroundColor: COLORS.lightGrey,
     justifyContent: 'center',
     alignItems: 'center',
+    marginRight: 16,
   },
   profileInfo: {
     flex: 1,
   },
   name: {
-    fontSize: 18,
+    fontSize: 22,
     fontWeight: 'bold',
     color: COLORS.text,
     marginBottom: 4,
   },
   userType: {
-    fontSize: 14,
-    color: COLORS.textSecondary,
+    fontSize: 16,
+    color: COLORS.primary,
     marginBottom: 4,
   },
   ratingContainer: {
@@ -550,25 +630,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   ratingText: {
-    color: '#FFD700',
-    fontSize: 14,
-    marginRight: 4,
+    color: '#FFC107',
+    fontSize: 16,
   },
   ratingValue: {
-    fontSize: 14,
-    color: COLORS.textSecondary,
+    marginLeft: 4,
+    color: COLORS.text,
+    fontWeight: '500',
   },
   editProfileButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: COLORS.background,
-    justifyContent: 'center',
-    alignItems: 'center',
+    padding: 8,
   },
   section: {
     backgroundColor: COLORS.white,
-    borderRadius: 16,
+    borderRadius: 12,
     padding: 16,
     marginBottom: 16,
     ...Platform.select({
@@ -579,13 +654,13 @@ const styles = StyleSheet.create({
         shadowRadius: 4,
       },
       android: {
-        elevation: 3,
+        elevation: 2,
       },
     }),
   },
   dashboardSection: {
     backgroundColor: COLORS.white,
-    borderRadius: 16,
+    borderRadius: 12,
     padding: 16,
     marginBottom: 16,
     ...Platform.select({
@@ -596,13 +671,13 @@ const styles = StyleSheet.create({
         shadowRadius: 4,
       },
       android: {
-        elevation: 3,
+        elevation: 2,
       },
     }),
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: '600',
     color: COLORS.text,
     marginBottom: 16,
   },
@@ -613,176 +688,140 @@ const styles = StyleSheet.create({
   },
   statCard: {
     flex: 1,
-    backgroundColor: COLORS.background,
-    borderRadius: 12,
-    padding: 12,
-    marginHorizontal: 4,
     alignItems: 'center',
+    paddingVertical: 12,
+    borderRadius: 8,
+    backgroundColor: COLORS.lightGrey + '50',
+    marginHorizontal: 4,
   },
   statValue: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: 'bold',
     color: COLORS.primary,
+    marginBottom: 4,
   },
   statLabel: {
     fontSize: 12,
     color: COLORS.textSecondary,
-    textAlign: 'center',
-    marginTop: 4,
   },
   earningsCard: {
-    backgroundColor: COLORS.background,
-    borderRadius: 12,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: COLORS.primary + '10',
     padding: 16,
+    borderRadius: 8,
     marginBottom: 16,
   },
   earningsLabel: {
     fontSize: 14,
     color: COLORS.textSecondary,
+    marginBottom: 4,
   },
   earningsValue: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: COLORS.primary,
-    marginBottom: 12,
-  },
-  responseRateContainer: {
-    marginTop: 8,
-  },
-  responseRateLabel: {
-    fontSize: 14,
-    color: COLORS.textSecondary,
-    marginBottom: 4,
-  },
-  responseRateBar: {
-    height: 8,
-    backgroundColor: COLORS.lightGray,
-    borderRadius: 4,
-    marginBottom: 4,
-  },
-  responseRateFill: {
-    height: 8,
-    backgroundColor: COLORS.success,
-    borderRadius: 4,
-  },
-  responseRateValue: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: COLORS.success,
-    textAlign: 'right',
-  },
-  quickActionsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-  },
-  quickActionButton: {
-    alignItems: 'center',
-    padding: 12,
-    position: 'relative',
-  },
-  quickActionText: {
-    fontSize: 14,
     color: COLORS.text,
-    marginTop: 4,
   },
-  notificationBadge: {
-    position: 'absolute',
-    top: 4,
-    right: 4,
-    backgroundColor: 'red',
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    justifyContent: 'center',
+  reviewsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
   },
-  notificationText: {
-    color: COLORS.white,
-    fontSize: 10,
+  reviewsText: {
+    fontSize: 16,
+    color: COLORS.textSecondary,
+  },
+  reviewsCount: {
     fontWeight: 'bold',
+    color: COLORS.text,
+  },
+  viewReviewsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  viewReviewsText: {
+    fontSize: 14,
+    color: COLORS.primary,
+    marginRight: 4,
   },
   infoRow: {
     flexDirection: 'row',
     marginBottom: 12,
   },
   infoLabel: {
-    width: 150,
-    fontSize: 14,
+    flex: 1,
+    fontSize: 16,
     color: COLORS.textSecondary,
   },
   infoValue: {
-    flex: 1,
-    fontSize: 14,
-    color: COLORS.text,
-    fontWeight: '500',
-  },
-  bioContainer: {
-    marginTop: 8,
-  },
-  bioLabel: {
-    fontSize: 14,
-    color: COLORS.textSecondary,
-    marginBottom: 4,
-  },
-  bioText: {
-    fontSize: 14,
-    color: COLORS.text,
-    lineHeight: 20,
-  },
-  actionButtons: {
-    marginTop: 16,
-  },
-  saveButton: {
-    marginBottom: 8,
-  },
-  cancelButton: {
-  },
-  settingRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  settingLabel: {
+    flex: 2,
     fontSize: 16,
     color: COLORS.text,
-    marginBottom: 4,
   },
-  settingDescription: {
-    fontSize: 14,
+  bioText: {
+    fontSize: 16,
+    color: COLORS.text,
+    lineHeight: 24,
+  },
+  formSection: {
+    backgroundColor: COLORS.white,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    ...Platform.select({
+      ios: {
+        shadowColor: COLORS.black,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
+  },
+  inputLabel: {
+    fontSize: 16,
     color: COLORS.textSecondary,
-    maxWidth: '80%',
+    marginBottom: 8,
+    marginTop: 12,
   },
-  settingButton: {
+  textArea: {
+    height: 120,
+    textAlignVertical: 'top',
+  },
+  formButtons: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    marginTop: 24,
+  },
+  cancelButton: {
+    flex: 1,
+    marginRight: 8,
+  },
+  saveButton: {
+    flex: 1,
+    marginLeft: 8,
+  },
+  settingItem: {
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.lightGray,
+    borderBottomColor: COLORS.lightGrey,
   },
-  settingButtonContent: {
+  settingLeft: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  settingButtonText: {
+  settingText: {
     fontSize: 16,
     color: COLORS.text,
     marginLeft: 12,
   },
   logoutButton: {
-    borderBottomWidth: 0,
-    marginTop: 8,
-  },
-  logoutButtonText: {
-    fontSize: 16,
-    color: COLORS.error,
-    marginLeft: 12,
-  },
-  versionText: {
-    textAlign: 'center',
-    fontSize: 12,
-    color: COLORS.textSecondary,
     marginBottom: 16,
   },
 });

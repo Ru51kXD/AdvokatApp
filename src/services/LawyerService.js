@@ -1,5 +1,5 @@
-import { db, initDatabase, getDatabase, executeQuery, getLawyerByUserId, getUserById } from '../database/database';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { db, executeQuery, getDatabase, getLawyerByUserId, getUserById, initDatabase } from '../database/database';
 
 export const LawyerService = {
   // Get lawyer profile by user ID
@@ -73,9 +73,20 @@ export const LawyerService = {
         // Make sure we have a valid db instance
         await getDatabase();
         
+        // Автоматически обновляем имена адвокатов если они одинаковые
+        try {
+          const checkResult = await executeQuery('SELECT COUNT(DISTINCT u.username) as unique_count, COUNT(*) as total_count FROM lawyers l JOIN users u ON l.user_id = u.id WHERE u.user_type = "lawyer"');
+          if (checkResult && checkResult[0] && checkResult[0].unique_count < checkResult[0].total_count / 2) {
+            console.log('Обнаружены дублирующиеся имена адвокатов, обновляем...');
+            await LawyerService.updateLawyerNames();
+          }
+        } catch (updateError) {
+          console.log('Не удалось автоматически обновить имена адвокатов:', updateError);
+        }
+        
         let query = `
           SELECT l.id, l.user_id, l.specialization, l.experience, l.price_range, l.bio, l.rating, l.city, l.address, 
-                 u.username, u.email, u.phone
+                 u.username as name, u.username, u.email, u.phone
           FROM lawyers l
           JOIN users u ON l.user_id = u.id
           WHERE 1=1
@@ -556,6 +567,57 @@ export const LawyerService = {
         success: false, 
         error: error.message || String(error)
       };
+    }
+  },
+
+  // Функция для обновления имен адвокатов (чтобы у всех были разные имена)
+  updateLawyerNames: async () => {
+    try {
+      console.log('Обновляем имена адвокатов...');
+      
+      // Список казахстанских имен для адвокатов
+      const lawyerNames = [
+        'Айдар Нурланов', 'Динара Касымова', 'Асель Сериков', 'Ержан Мусин',
+        'Гульнара Алимова', 'Марат Джумабаев', 'Айжан Бектурова', 'Самал Сарсенов',
+        'Руслан Ахметов', 'Зарина Искакова', 'Азат Токаев', 'Сауле Манапова',
+        'Аслан Шамшиев', 'Гульназ Турсунов', 'Санжар Назаров', 'Айнур Громова',
+        'Даулет Имангалиев', 'Ерлан Степанов', 'Бахыт Комарова', 'Алмас Орлова',
+        'Жанар Кузнецов', 'Мейрам Лебедев', 'Анара Зайцева', 'Нуржан Федорова',
+        'Кайрат Васильева', 'Арман Макаров', 'Лейла Петрова', 'Максат Соколов'
+      ];
+      
+      // Получаем пользователей-адвокатов
+      const users = JSON.parse(await AsyncStorage.getItem('users')) || [];
+      const lawyers = JSON.parse(await AsyncStorage.getItem('lawyers')) || [];
+      
+      let updatedUsers = [...users];
+      let updateCount = 0;
+      
+      // Обновляем имена адвокатов
+      lawyers.forEach((lawyer, index) => {
+        const userIndex = updatedUsers.findIndex(u => u.id === lawyer.user_id);
+        if (userIndex !== -1 && updatedUsers[userIndex].user_type === 'lawyer') {
+          const newName = lawyerNames[index % lawyerNames.length];
+          if (updatedUsers[userIndex].username !== newName) {
+            updatedUsers[userIndex].username = newName;
+            updateCount++;
+            console.log(`Обновлено имя адвоката ID ${lawyer.user_id}: ${newName}`);
+          }
+        }
+      });
+      
+      // Сохраняем обновленных пользователей
+      if (updateCount > 0) {
+        await AsyncStorage.setItem('users', JSON.stringify(updatedUsers));
+        console.log(`Успешно обновлено ${updateCount} имен адвокатов`);
+      } else {
+        console.log('Нет адвокатов для обновления имен');
+      }
+      
+      return { success: true, updated: updateCount };
+    } catch (error) {
+      console.error('Ошибка при обновлении имен адвокатов:', error);
+      throw error;
     }
   }
 }; 

@@ -1,8 +1,23 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
-import Card from './Card';
+import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { COLORS, RESPONSE_STATUS } from '../constants';
 import Button from './Button';
+import Card from './Card';
+
+// Helper function to safely extract text from possibly nested objects
+const safeText = (value) => {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  if (typeof value === 'object') {
+    if (value.hasOwnProperty('label')) return value.label;
+    if (value.hasOwnProperty('name')) return value.name;
+    if (value.hasOwnProperty('value')) return value.value;
+    if (value.hasOwnProperty('id')) return value.id;
+    return JSON.stringify(value);
+  }
+  return String(value);
+};
 
 const ResponseCard = ({ 
   response, 
@@ -71,6 +86,11 @@ const ResponseCard = ({
   const getAvatar = () => {
     return require('../../assets/images/icon.png');
   };
+
+  // Safely extract response data
+  const lawyerName = safeText(response.lawyer_name || response.username || 'Адвокат');
+  const specialization = safeText(response.specialization || 'Юрист');
+  const message = safeText(response.message);
   
   return (
     <Card onPress={onPress}>
@@ -78,16 +98,16 @@ const ResponseCard = ({
       <View style={styles.header}>
         <Image source={getAvatar()} style={styles.avatar} />
         <View style={styles.headerInfo}>
-          <Text style={styles.name}>{response.lawyer_name}</Text>
-          <Text style={styles.specialization}>{response.specialization || 'Юрист'}</Text>
+          <Text style={styles.name}>{lawyerName}</Text>
+          <Text style={styles.specialization}>{specialization}</Text>
           {response.rating > 0 && renderRating(response.rating)}
         </View>
         {getStatusBadge(response.status)}
       </View>
       
       {/* Response Message */}
-      {response.message && (
-        <Text style={styles.message}>{response.message}</Text>
+      {message && (
+        <Text style={styles.message}>{message}</Text>
       )}
       
       {/* Additional Info */}
@@ -125,7 +145,10 @@ const ResponseCard = ({
       {/* Contact info for accepted responses */}
       {response.status === RESPONSE_STATUS.ACCEPTED && (
         <Card.Footer>
-          <TouchableOpacity style={styles.contactButton} onPress={onPress}>
+          <TouchableOpacity 
+            style={styles.contactButton} 
+            onPress={() => onPress && onPress(response)}
+          >
             <Text style={styles.contactText}>Связаться с юристом</Text>
           </TouchableOpacity>
         </Card.Footer>

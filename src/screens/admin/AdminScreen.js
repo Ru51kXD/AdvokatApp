@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, ScrollView } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { executeQuery, getDatabase, showTableContents } from '../../database/database';
 import { LawyerService } from '../../services/LawyerService';
-import { showTableContents, executeQuery, getDatabase } from '../../database/database';
 
 const AdminScreen = () => {
   const [loading, setLoading] = useState(false);
@@ -31,6 +31,30 @@ const AdminScreen = () => {
     } catch (error) {
       console.error('Error checking lawyers:', error);
       setMessage(`Ошибка при проверке: ${error.message || error}`);
+    }
+  };
+
+  const updateLawyerNames = async () => {
+    try {
+      setLoading(true);
+      setMessage('Обновляем имена адвокатов...');
+      
+      const result = await LawyerService.updateLawyerNames();
+      
+      if (result.success) {
+        setMessage(`Успешно обновлено ${result.updated} имен адвокатов!`);
+        Alert.alert('Успех', `Обновлено ${result.updated} имен адвокатов`);
+        await checkLawyers();
+      } else {
+        setMessage('Ошибка при обновлении имен адвокатов');
+        Alert.alert('Ошибка', 'Не удалось обновить имена адвокатов');
+      }
+    } catch (error) {
+      console.error('Error updating lawyer names:', error);
+      setMessage(`Ошибка: ${error.message || error}`);
+      Alert.alert('Ошибка', `Не удалось обновить имена: ${error.message || error}`);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -375,6 +399,14 @@ const AdminScreen = () => {
         disabled={loading}
       >
         <Text style={styles.secondaryButtonText}>Проверить адвокатов в базе</Text>
+      </TouchableOpacity>
+      
+      <TouchableOpacity
+        style={[styles.button, styles.secondaryButton]}
+        onPress={updateLawyerNames}
+        disabled={loading}
+      >
+        <Text style={styles.secondaryButtonText}>Обновить имена адвокатов</Text>
       </TouchableOpacity>
       
       {lawyers.length > 0 && (

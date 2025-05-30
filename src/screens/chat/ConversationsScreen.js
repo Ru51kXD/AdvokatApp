@@ -1,24 +1,22 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { 
-  View, 
-  Text, 
-  FlatList, 
-  StyleSheet, 
-  TouchableOpacity, 
-  ActivityIndicator,
-  RefreshControl,
-  Platform,
-  TextInput,
-  Image,
-  Alert,
-  Animated,
-  ScrollView,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { format, formatDistanceToNow } from 'date-fns';
 import ru from 'date-fns/locale/ru';
+import React, { useCallback, useEffect, useState } from 'react';
+import {
+    ActivityIndicator,
+    Alert,
+    Animated,
+    FlatList,
+    RefreshControl,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { COLORS } from '../../constants';
 import { useAuth } from '../../contexts/AuthContext';
@@ -65,7 +63,6 @@ const ConversationsScreen = ({ navigation }) => {
   const [conversations, setConversations] = useState([]);
   const [filteredConversations, setFilteredConversations] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [initialLoading, setInitialLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -94,27 +91,12 @@ const ConversationsScreen = ({ navigation }) => {
     }
   };
 
-  // Инициализация с помощью тестовых данных для мгновенного отображения
+  // Загружаем реальные данные при инициализации
   useEffect(() => {
-    if (initialLoading && user) {
-      const mockData = MOCK_CONVERSATIONS.map(conv => ({
-        ...conv,
-        client_id: user.userType === 'client' ? user.id : 1000 + Math.floor(Math.random() * 100),
-        lawyer_id: user.userType === 'lawyer' ? user.id : 2000 + Math.floor(Math.random() * 100),
-        // Добавим вероятность наличия картинки или документа
-        has_image: Math.random() > 0.7,
-        has_document: Math.random() > 0.8,
-        // Добавим случайный статус печати
-        typing: Math.random() > 0.8
-      }));
-      setConversations(mockData);
-      setFilteredConversations(mockData);
-      setInitialLoading(false);
-      
-      // Загружаем реальные данные асинхронно
+    if (user) {
       loadConversations();
     }
-  }, [user, initialLoading]);
+  }, [user]);
 
   const loadConversations = useCallback(async () => {
     if (!user) return;
@@ -122,33 +104,26 @@ const ConversationsScreen = ({ navigation }) => {
     try {
       setLoading(true);
       setError(null);
-      console.log('Загружаем чаты...');
-      
-      // Генерируем тестовые чаты для адвоката
-      if (user.userType === 'lawyer') {
-        await ChatService.generateMockChatsForLawyer(user.id);
-      }
+      console.log('Загружаем чаты для пользователя:', user.id, user.user_type);
       
       const data = await ChatService.getConversations(user.id);
       console.log(`Загружено ${data.length} чатов`);
       
       if (data && data.length > 0) {
-        // Добавим дополнительные данные для UI
-        const enhancedData = data.map(conv => ({
-          ...conv,
-          // Добавим вероятность наличия картинки или документа
-          has_image: Math.random() > 0.7,
-          has_document: Math.random() > 0.8,
-          // Добавим случайный статус печати
-          typing: Math.random() > 0.8
-        }));
-        setConversations(enhancedData);
-        applyFilters(enhancedData, searchQuery, activeFilter);
+        // Убираем случайную генерацию статусов для более стабильного UI
+        setConversations(data);
+        applyFilters(data, searchQuery, activeFilter);
+      } else {
+        // Если нет чатов, очищаем список
+        setConversations([]);
+        setFilteredConversations([]);
       }
     } catch (err) {
       console.error('Error loading conversations:', err);
       setError('Не удалось загрузить список бесед');
-      // Оставляем тестовые данные, если загрузка не удалась
+      // Если ошибка, показываем пустой список
+      setConversations([]);
+      setFilteredConversations([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -191,13 +166,13 @@ const ConversationsScreen = ({ navigation }) => {
     applyFilters(conversations, searchQuery, activeFilter);
   }, [conversations, searchQuery, activeFilter, applyFilters]);
 
-  // Загружаем беседы при фокусе на экране, но только если уже были инициализированы
+  // Загружаем беседы при фокусе на экране
   useFocusEffect(
     useCallback(() => {
-      if (!initialLoading) {
+      if (user) {
         loadConversations();
       }
-    }, [loadConversations, initialLoading])
+    }, [loadConversations, user])
   );
 
   // Обработчик обновления списка бесед
@@ -334,16 +309,12 @@ const ConversationsScreen = ({ navigation }) => {
           
           <View style={styles.messageContainer}>
             <View style={styles.messageContent}>
-              {item.typing ? (
-                <Text style={styles.typingText}>печатает...</Text>
-              ) : (
-                <Text style={[
-                  styles.message, 
-                  item.unread_count > 0 && styles.unreadMessage
-                ]} numberOfLines={1}>
-                  {item.last_message}
-                </Text>
-              )}
+              <Text style={[
+                styles.message, 
+                item.unread_count > 0 && styles.unreadMessage
+              ]} numberOfLines={1}>
+                {item.last_message}
+              </Text>
               {hasAttachment && (
                 <View style={styles.attachmentIndicator}>
                   <Ionicons 

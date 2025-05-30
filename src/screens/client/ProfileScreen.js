@@ -19,6 +19,9 @@ import { COLORS } from '../../constants';
 import Button from '../../components/Button';
 import { useAuth } from '../../contexts/AuthContext';
 import { RequestService } from '../../services/RequestService';
+import ImageService from '../../services/ImageService';
+import UserAvatar from '../../components/UserAvatar';
+import AvatarPickerModal from '../../components/AvatarPickerModal';
 
 const ClientProfileScreen = ({ navigation }) => {
   const { authState, signOut } = useAuth();
@@ -29,6 +32,24 @@ const ClientProfileScreen = ({ navigation }) => {
   // Состояние для статистики
   const [statistics, setStatistics] = useState(null);
   const [loadingStats, setLoadingStats] = useState(true);
+  
+  // Состояние для аватарки
+  const [hasAvatar, setHasAvatar] = useState(false);
+  const [isAvatarPickerVisible, setIsAvatarPickerVisible] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [avatarKey, setAvatarKey] = useState(0); // Для принудительного обновления аватара
+  
+  // Проверяем наличие аватара при загрузке экрана
+  useEffect(() => {
+    const checkAvatar = async () => {
+      if (authState?.user?.id) {
+        const result = await ImageService.getUserAvatar(authState.user.id);
+        setHasAvatar(result.success);
+      }
+    };
+    
+    checkAvatar();
+  }, [authState?.user?.id]);
   
   // Загрузка статистики при фокусе на экране
   useFocusEffect(
@@ -121,6 +142,85 @@ const ClientProfileScreen = ({ navigation }) => {
     );
   };
 
+  // Обработчики для аватарки
+  const handleAvatarPress = () => {
+    setIsAvatarPickerVisible(true);
+  };
+  
+  const handlePickImage = async () => {
+    setIsAvatarPickerVisible(false);
+    setIsLoading(true);
+    
+    try {
+      const result = await ImageService.pickImage();
+      
+      if (result.success && result.image) {
+        const saveResult = await ImageService.saveUserAvatar(authState.user.id, result.image);
+        
+        if (saveResult.success) {
+          setHasAvatar(true);
+          setAvatarKey(prev => prev + 1); // Обновляем ключ для принудительного обновления аватара
+          Alert.alert('Успешно', 'Аватар успешно обновлен');
+        } else {
+          Alert.alert('Ошибка', saveResult.error || 'Не удалось сохранить аватар');
+        }
+      }
+    } catch (error) {
+      console.error('Ошибка при выборе изображения:', error);
+      Alert.alert('Ошибка', 'Произошла ошибка при выборе изображения');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
+  const handleTakePhoto = async () => {
+    setIsAvatarPickerVisible(false);
+    setIsLoading(true);
+    
+    try {
+      const result = await ImageService.takePhoto();
+      
+      if (result.success && result.image) {
+        const saveResult = await ImageService.saveUserAvatar(authState.user.id, result.image);
+        
+        if (saveResult.success) {
+          setHasAvatar(true);
+          setAvatarKey(prev => prev + 1); // Обновляем ключ для принудительного обновления аватара
+          Alert.alert('Успешно', 'Аватар успешно обновлен');
+        } else {
+          Alert.alert('Ошибка', saveResult.error || 'Не удалось сохранить аватар');
+        }
+      }
+    } catch (error) {
+      console.error('Ошибка при съемке фото:', error);
+      Alert.alert('Ошибка', 'Произошла ошибка при съемке фото');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
+  const handleRemoveAvatar = async () => {
+    setIsAvatarPickerVisible(false);
+    setIsLoading(true);
+    
+    try {
+      const result = await ImageService.removeUserAvatar(authState.user.id);
+      
+      if (result.success) {
+        setHasAvatar(false);
+        setAvatarKey(prev => prev + 1); // Обновляем ключ для принудительного обновления аватара
+        Alert.alert('Успешно', 'Аватар успешно удален');
+      } else {
+        Alert.alert('Ошибка', result.error || 'Не удалось удалить аватар');
+      }
+    } catch (error) {
+      console.error('Ошибка при удалении аватара:', error);
+      Alert.alert('Ошибка', 'Произошла ошибка при удалении аватара');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const navigateToAdminPanel = () => {
     navigation.navigate('AdminScreen');
   };
@@ -130,15 +230,22 @@ const ClientProfileScreen = ({ navigation }) => {
       <ScrollView contentContainerStyle={styles.content}>
         {/* Профиль пользователя */}
         <View style={styles.profileHeader}>
-          <View style={styles.avatarContainer}>
-            <Image 
-              source={require('../../../assets/images/icon.png')} 
+          {isLoading ? (
+            <View style={styles.avatarContainer}>
+              <ActivityIndicator size="large" color={COLORS.primary} />
+            </View>
+          ) : (
+            <UserAvatar
+              key={avatarKey}
+              userId={authState?.user?.id}
+              username={authState?.user?.username || 'Пользователь'}
+              size={80}
+              isLawyer={false}
+              showEditButton={true}
+              onEditPress={handleAvatarPress}
               style={styles.avatar}
             />
-            <TouchableOpacity style={styles.editAvatarButton}>
-              <Ionicons name="camera" size={20} color={COLORS.white} />
-            </TouchableOpacity>
-          </View>
+          )}
           
           <View style={styles.profileInfo}>
             <Text style={styles.name}>{authState?.user?.username || 'Пользователь'}</Text>
@@ -263,15 +370,34 @@ const ClientProfileScreen = ({ navigation }) => {
         </View>
 
         {/* Кнопка выхода */}
-        <Button
+        <Button 
           title="Выйти из аккаунта"
           onPress={handleLogout}
           variant="outline"
+          color="error"
           style={styles.logoutButton}
         />
-
-        <Text style={styles.version}>Версия приложения: 1.0.0</Text>
+        
+        {/* Только для разработки, в релизе удалить */}
+        {__DEV__ && (
+          <TouchableOpacity 
+            style={styles.devButton}
+            onPress={navigateToAdminPanel}
+          >
+            <Text style={styles.devButtonText}>Админ-панель (DEV)</Text>
+          </TouchableOpacity>
+        )}
       </ScrollView>
+      
+      {/* Модальное окно выбора аватара */}
+      <AvatarPickerModal
+        visible={isAvatarPickerVisible}
+        onClose={() => setIsAvatarPickerVisible(false)}
+        onPickFromGallery={handlePickImage}
+        onTakePhoto={handleTakePhoto}
+        onRemoveAvatar={handleRemoveAvatar}
+        hasAvatar={hasAvatar}
+      />
     </SafeAreaView>
   );
 };
@@ -287,65 +413,46 @@ const styles = StyleSheet.create({
   profileHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.white,
-    borderRadius: 8,
-    padding: 16,
-    marginBottom: 16,
-    shadowColor: COLORS.black,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  avatarContainer: {
-    position: 'relative',
-    marginRight: 16,
+    marginBottom: 24,
   },
   avatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-  },
-  editAvatarButton: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    backgroundColor: COLORS.primary,
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    justifyContent: 'center',
-    alignItems: 'center',
+    marginRight: 16,
   },
   profileInfo: {
     flex: 1,
   },
   name: {
-    fontSize: 18,
+    fontSize: 22,
     fontWeight: 'bold',
     color: COLORS.text,
     marginBottom: 4,
   },
   userType: {
-    fontSize: 14,
-    color: COLORS.textSecondary,
+    fontSize: 16,
+    color: COLORS.primary,
   },
   editProfileButton: {
     padding: 8,
   },
   section: {
     backgroundColor: COLORS.white,
-    borderRadius: 8,
+    borderRadius: 12,
     padding: 16,
     marginBottom: 16,
-    shadowColor: COLORS.black,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    ...Platform.select({
+      ios: {
+        shadowColor: COLORS.black,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
   },
   sectionTitle: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '600',
     color: COLORS.text,
     marginBottom: 16,
@@ -359,6 +466,39 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: COLORS.text,
     marginLeft: 12,
+  },
+  statsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  statItem: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  statValue: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: COLORS.primary,
+    marginBottom: 4,
+  },
+  statLabel: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+  },
+  refreshButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 16,
+    padding: 8,
+    backgroundColor: COLORS.lightGrey,
+    borderRadius: 8,
+  },
+  refreshText: {
+    fontSize: 14,
+    color: COLORS.primary,
+    marginLeft: 8,
   },
   settingItem: {
     flexDirection: 'row',
@@ -377,75 +517,28 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     marginLeft: 12,
   },
-  statsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 16,
+  logoutButton: {
+    marginTop: 8,
+    marginBottom: 32,
   },
-  statItem: {
-    flex: 1,
-    alignItems: 'center',
-    backgroundColor: COLORS.white,
-    borderRadius: 8,
+  devButton: {
     padding: 16,
-    marginHorizontal: 4,
-    ...Platform.select({
-      ios: {
-        shadowColor: COLORS.black,
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.2,
-        shadowRadius: 2,
-      },
-      android: {
-        elevation: 2,
-      },
-    }),
+    backgroundColor: '#333',
+    borderRadius: 8,
+    alignItems: 'center',
+    marginBottom: 32,
   },
-  statValue: {
-    fontSize: 24,
+  devButtonText: {
+    color: '#fff',
     fontWeight: 'bold',
-    color: COLORS.primary,
-    marginBottom: 4,
-  },
-  statLabel: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-    textAlign: 'center',
   },
   loadingContainer: {
-    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 16,
+    padding: 16,
   },
   loadingText: {
-    fontSize: 16,
-    color: COLORS.textSecondary,
-    marginLeft: 8,
-  },
-  refreshButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    borderWidth: 1,
-    borderColor: COLORS.lightGrey,
-    borderRadius: 8,
     marginTop: 8,
-  },
-  refreshText: {
-    fontSize: 14,
-    color: COLORS.primary,
-    marginLeft: 8,
-  },
-  logoutButton: {
-    marginBottom: 16,
-  },
-  version: {
-    textAlign: 'center',
-    fontSize: 12,
     color: COLORS.textSecondary,
-    marginBottom: 24,
   },
 });
 

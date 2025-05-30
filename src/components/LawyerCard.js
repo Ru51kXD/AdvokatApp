@@ -1,12 +1,12 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
-import Card from './Card';
-import { COLORS } from '../constants';
-import ImageService from '../services/ImageService';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import React from 'react';
+import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { COLORS } from '../constants';
 import { useAuth } from '../contexts/AuthContext';
 import ChatService from '../services/ChatService';
+import ImageService from '../services/ImageService';
+import Card from './Card';
 
 // Helper function to safely extract text from possibly nested objects
 const safeText = (value) => {
@@ -36,7 +36,7 @@ const LawyerCard = ({ lawyer, onPress }) => {
   const specialization = safeText(lawyer.specialization);
   const priceRange = safeText(lawyer.price_range);
   const city = safeText(lawyer.city);
-  const username = lawyer.username;
+  const username = lawyer.name || lawyer.username;
 
   // Handle message button press
   const handleMessagePress = async (e) => {
@@ -70,7 +70,7 @@ const LawyerCard = ({ lawyer, onPress }) => {
       // Переходим к экрану чата
       navigation.navigate('ChatScreen', {
         conversationId: result.conversation.id,
-        title: username || 'Адвокат',
+        title: lawyer.name || lawyer.username || 'Адвокат',
         guestId: !user ? senderId : null
       });
     } catch (err) {
@@ -116,8 +116,9 @@ const LawyerCard = ({ lawyer, onPress }) => {
     
     // Get lawyer initials - directly compute if needed
     let initials;
-    if (typeof username === 'string' && username.trim() !== '') {
-      const name = username.trim();
+    const displayName = lawyer.name || lawyer.username;
+    if (typeof displayName === 'string' && displayName.trim() !== '') {
+      const name = displayName.trim();
       const parts = name.split(' ');
       if (parts.length > 1) {
         initials = parts[0].charAt(0) + parts[1].charAt(0);

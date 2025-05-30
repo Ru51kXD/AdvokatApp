@@ -1,5 +1,5 @@
-import { db } from '../database/database';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { db } from '../database/database';
 import { LawyerService } from './LawyerService';
 
 // Storage keys
@@ -290,6 +290,8 @@ const ChatService = {
       
       // Get conversations
       const allConversations = JSON.parse(await AsyncStorage.getItem(STORAGE_KEYS.CONVERSATIONS)) || [];
+      console.log('Total conversations in storage:', allConversations.length);
+      
       let conversations;
       
       if (user.user_type === 'client') {
@@ -299,6 +301,8 @@ const ChatService = {
         // For lawyer - get conversations where they are the lawyer
         conversations = allConversations.filter(c => c.lawyer_id === userId);
       }
+      
+      console.log(`Found ${conversations.length} conversations for user ${userId} (${user.user_type})`);
       
       // Get messages to get last message
       const allMessages = JSON.parse(await AsyncStorage.getItem(STORAGE_KEYS.MESSAGES)) || [];
@@ -322,12 +326,12 @@ const ChatService = {
         }
         
         // Get better lawyer name when available
-        let lawyerName = user.username;
+        let lawyerName = user.name || user.username;
         if (user.user_type === 'client') {
           // The client is talking to a lawyer - get better lawyer info
           const lawyerUser = users.find(u => u.id === conversation.lawyer_id);
           const lawyerInfo = lawyers.find(l => l.user_id === conversation.lawyer_id);
-          lawyerName = lawyerInfo?.name || lawyerUser?.username || 'Адвокат';
+          lawyerName = lawyerInfo?.name || lawyerUser?.name || lawyerUser?.username || 'Адвокат';
         }
         
         // Get last message
@@ -335,8 +339,8 @@ const ChatService = {
         
         return {
           ...conversation,
-          lawyer_name: user.user_type === 'client' ? lawyerName : user.username,
-          client_name: user.user_type === 'lawyer' ? (isGuestConversation ? 'Гость' : otherUserName) : user.username,
+          lawyer_name: user.user_type === 'client' ? lawyerName : (user.name || user.username),
+          client_name: user.user_type === 'lawyer' ? (isGuestConversation ? 'Гость' : (otherUserName)) : (user.name || user.username),
           last_message: lastMessage?.message || '',
           last_message_time: lastMessage?.created_at || conversation.updated_at,
           has_guest: isGuestConversation
@@ -446,7 +450,7 @@ const ChatService = {
       const lawyerInfo = lawyers.find(l => l.user_id === conversation.lawyer_id);
       
       // Determine lawyer name (with prioritization)
-      const lawyerName = lawyerInfo?.name || lawyerUser?.username || 'Адвокат';
+      const lawyerName = lawyerInfo?.name || lawyerUser?.name || lawyerUser?.username || 'Адвокат';
       
       // Enrich messages with sender information
       const enrichedMessages = messages.map(message => {
@@ -585,7 +589,7 @@ const ChatService = {
           
           // Пытаемся получить имя адвоката
           const lawyerInfo = await LawyerService.getLawyerProfile(receiverId);
-          lawyerName = lawyerInfo?.username || 'Адвокат';
+          lawyerName = lawyerInfo?.name || lawyerInfo?.username || 'Адвокат';
         } else if (isGuestReceiver) {
           // Если получатель гость, то отправитель должен быть адвокатом
           clientId = receiverId;
@@ -594,34 +598,42 @@ const ChatService = {
           
           // Пытаемся получить имя адвоката
           const lawyerInfo = await LawyerService.getLawyerProfile(senderId);
-          lawyerName = lawyerInfo?.username || 'Адвокат';
+          lawyerName = lawyerInfo?.name || lawyerInfo?.username || 'Адвокат';
         } else {
-          // Проверяем, кто клиент, а кто адвокат
-          const { getUserType } = await import('../database/database');
-          const senderType = await getUserType(senderId);
+          // Проверяем, кто клиент, а кто адвокат из AsyncStorage данных
+          const users = JSON.parse(await AsyncStorage.getItem('users')) || [];
+          const senderUser = users.find(u => u.id === senderId);
+          const receiverUser = users.find(u => u.id === receiverId);
           
-          if (senderType === 'client') {
+          if (senderUser && senderUser.user_type === 'client') {
             clientId = senderId;
             lawyerId = receiverId;
+            clientName = senderUser.name || senderUser.username || 'Клиент';
             
-            // Получаем имена пользователей
-            const { getUserById } = await import('../database/database');
-            const clientInfo = await getUserById(senderId);
-            const lawyerInfo = await LawyerService.getLawyerProfile(receiverId);
-            
-            clientName = clientInfo?.username || 'Клиент';
-            lawyerName = lawyerInfo?.username || 'Адвокат';
-          } else {
+            // Получаем имя адвоката
+            if (receiverUser) {
+              lawyerName = receiverUser.name || receiverUser.username || 'Адвокат';
+            } else {
+              const lawyerInfo = await LawyerService.getLawyerProfile(receiverId);
+              lawyerName = lawyerInfo?.name || lawyerInfo?.username || 'Адвокат';
+            }
+          } else if (senderUser && senderUser.user_type === 'lawyer') {
             clientId = receiverId;
             lawyerId = senderId;
+            lawyerName = senderUser.name || senderUser.username || 'Адвокат';
             
-            // Получаем имена пользователей
-            const { getUserById } = await import('../database/database');
-            const clientInfo = await getUserById(receiverId);
-            const lawyerInfo = await LawyerService.getLawyerProfile(senderId);
-            
-            clientName = clientInfo?.username || 'Клиент';
-            lawyerName = lawyerInfo?.username || 'Адвокат';
+            // Получаем имя клиента
+            if (receiverUser) {
+              clientName = receiverUser.username || 'Клиент';
+            } else {
+              clientName = 'Клиент';
+            }
+          } else {
+            // Fallback: используем данные по умолчанию
+            clientId = senderId;
+            lawyerId = receiverId;
+            clientName = senderUser?.name || senderUser?.username || 'Клиент';
+            lawyerName = receiverUser?.name || receiverUser?.username || 'Адвокат';
           }
         }
       } catch (err) {
@@ -719,6 +731,13 @@ const ChatService = {
       // Сохраняем обновленные данные
       await AsyncStorage.setItem(STORAGE_KEYS.MESSAGES, JSON.stringify(messages));
       await AsyncStorage.setItem(STORAGE_KEYS.CONVERSATIONS, JSON.stringify(conversations));
+      
+      console.log('Chat saved successfully:', {
+        conversationId: conversation.id,
+        messageId: newMessage.id,
+        totalConversations: conversations.length,
+        totalMessages: messages.length
+      });
       
       return { message: newMessage, conversation };
     } catch (error) {

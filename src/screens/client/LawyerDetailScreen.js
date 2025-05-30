@@ -1,27 +1,24 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import { 
-  View, 
-  StyleSheet, 
-  ScrollView, 
-  Text, 
-  Image, 
-  TouchableOpacity,
-  ActivityIndicator,
-  Alert,
-  Linking,
-  FlatList,
-  Modal,
+import { Ionicons } from '@expo/vector-icons';
+import React, { useCallback, useEffect, useState } from 'react';
+import {
+    ActivityIndicator,
+    Alert,
+    Linking,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
 
-import { COLORS } from '../../constants';
 import Button from '../../components/Button';
 import Card from '../../components/Card';
-import { LawyerService } from '../../services/LawyerService';
+import { COLORS } from '../../constants';
 import { useAuth } from '../../contexts/AuthContext';
 import ChatService from '../../services/ChatService';
 import ImageService from '../../services/ImageService';
+import { LawyerService } from '../../services/LawyerService';
 
 // Helper function to safely extract text from possibly nested objects
 const safeText = (value) => {
@@ -130,7 +127,8 @@ const LawyerDetailScreen = ({ route, navigation }) => {
       // Переходим к экрану чата
       navigation.navigate('ChatScreen', {
         conversationId: result.conversation.id,
-        title: safeText(lawyer.username) || 'Адвокат',
+        title: safeText(lawyer.name) || safeText(lawyer.username) || 'Адвокат',
+        lawyerId: lawyer.user_id || lawyer.id,
         guestId: !user ? senderId : null
       });
     } catch (err) {
@@ -179,16 +177,16 @@ const LawyerDetailScreen = ({ route, navigation }) => {
       : '#cccccc';
     
     // Safely get username text
-    const username = safeText(lawyer && lawyer.username);
+    const displayName = safeText(lawyer && (lawyer.name || lawyer.username));
     
     // Get initials from username
     let initials = "АД"; // Default: "АД" for "Адвокат"
-    if (username) {
-      const parts = username.split(' ');
+    if (displayName) {
+      const parts = displayName.split(' ');
       if (parts.length > 1) {
         initials = parts[0].charAt(0) + parts[1].charAt(0);
       } else {
-        initials = username.substring(0, 2);
+        initials = displayName.substring(0, 2);
       }
       initials = initials.toUpperCase();
     }
@@ -264,7 +262,7 @@ const LawyerDetailScreen = ({ route, navigation }) => {
   }
 
   // Extract values from lawyer data to avoid rendering objects directly
-  const username = safeText(lawyer.username);
+  const username = safeText(lawyer.name) || safeText(lawyer.username);
   const specialization = safeText(lawyer.specialization);
   const experience = lawyer.experience;
   const priceRange = safeText(lawyer.price_range);
