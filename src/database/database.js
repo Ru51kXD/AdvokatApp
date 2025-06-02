@@ -3,6 +3,59 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 // Database instance
 export let db = null;
 
+// Ключи для хранения данных
+const STORAGE_KEYS = {
+  USERS: 'users',
+  LAWYERS: 'lawyers',
+  REVIEWS: 'reviews',
+  REQUESTS: 'requests',
+  ID_COUNTER: 'id_counter'
+};
+
+// Инициализация базы данных
+export const initDatabase = async () => {
+  try {
+    console.log('Initializing database...');
+    
+    // Создаем структуру для хранения счетчиков ID
+    const idCounterExists = await AsyncStorage.getItem(STORAGE_KEYS.ID_COUNTER);
+    if (!idCounterExists) {
+      await AsyncStorage.setItem(STORAGE_KEYS.ID_COUNTER, JSON.stringify({
+        users: 0,
+        lawyers: 0,
+        reviews: 0,
+        requests: 0
+      }));
+    }
+    
+    // Проверяем наличие основных коллекций
+    const usersExist = await AsyncStorage.getItem(STORAGE_KEYS.USERS);
+    if (!usersExist) {
+      await AsyncStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify([]));
+    }
+    
+    const lawyersExist = await AsyncStorage.getItem(STORAGE_KEYS.LAWYERS);
+    if (!lawyersExist) {
+      await AsyncStorage.setItem(STORAGE_KEYS.LAWYERS, JSON.stringify([]));
+    }
+    
+    const reviewsExist = await AsyncStorage.getItem(STORAGE_KEYS.REVIEWS);
+    if (!reviewsExist) {
+      await AsyncStorage.setItem(STORAGE_KEYS.REVIEWS, JSON.stringify([]));
+    }
+    
+    const requestsExist = await AsyncStorage.getItem(STORAGE_KEYS.REQUESTS);
+    if (!requestsExist) {
+      await AsyncStorage.setItem(STORAGE_KEYS.REQUESTS, JSON.stringify([]));
+    }
+    
+    console.log('Database initialized successfully');
+  } catch (error) {
+    console.error('Error initializing database:', error);
+    throw error;
+  }
+};
+
 // Initialize and get database connection
 export const getDatabase = async () => {
   try {
@@ -124,59 +177,6 @@ const handleUpdateQuery = async (query, params) => {
 const handleDeleteQuery = async (query, params) => {
   // Basic implementation for delete queries
   return { rowsAffected: 1 };
-};
-
-// Ключи для хранения данных
-const STORAGE_KEYS = {
-  USERS: 'users',
-  LAWYERS: 'lawyers',
-  REVIEWS: 'reviews',
-  REQUESTS: 'requests',
-  ID_COUNTER: 'id_counter'
-};
-
-// Инициализация базы данных
-export const initDatabase = async () => {
-  try {
-    console.log('Initializing database...');
-    
-    // Создаем структуру для хранения счетчиков ID
-    const idCounterExists = await AsyncStorage.getItem(STORAGE_KEYS.ID_COUNTER);
-    if (!idCounterExists) {
-      await AsyncStorage.setItem(STORAGE_KEYS.ID_COUNTER, JSON.stringify({
-        users: 0,
-        lawyers: 0,
-        reviews: 0,
-        requests: 0
-      }));
-    }
-    
-    // Проверяем наличие основных коллекций
-    const usersExist = await AsyncStorage.getItem(STORAGE_KEYS.USERS);
-    if (!usersExist) {
-      await AsyncStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify([]));
-    }
-    
-    const lawyersExist = await AsyncStorage.getItem(STORAGE_KEYS.LAWYERS);
-    if (!lawyersExist) {
-      await AsyncStorage.setItem(STORAGE_KEYS.LAWYERS, JSON.stringify([]));
-    }
-    
-    const reviewsExist = await AsyncStorage.getItem(STORAGE_KEYS.REVIEWS);
-    if (!reviewsExist) {
-      await AsyncStorage.setItem(STORAGE_KEYS.REVIEWS, JSON.stringify([]));
-    }
-    
-    const requestsExist = await AsyncStorage.getItem(STORAGE_KEYS.REQUESTS);
-    if (!requestsExist) {
-      await AsyncStorage.setItem(STORAGE_KEYS.REQUESTS, JSON.stringify([]));
-    }
-    
-    console.log('Database initialized successfully');
-  } catch (error) {
-    console.error('Error initializing database:', error);
-    throw error;
-  }
 };
 
 // Получить следующий ID для коллекции
@@ -543,5 +543,38 @@ export const getUserType = async (userId) => {
   } catch (error) {
     console.error('Error getting user type:', error);
     return 'client'; // По умолчанию в случае ошибки
+  }
+};
+
+// Create lawyers table
+export const createLawyersTable = async (tx) => {
+  try {
+    await tx.executeSql(
+      `CREATE TABLE IF NOT EXISTS lawyers (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        name TEXT,
+        specialization TEXT,
+        experience INTEGER,
+        price_range TEXT,
+        bio TEXT,
+        city TEXT,
+        address TEXT,
+        rating REAL DEFAULT 0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users (id)
+      )`,
+      [],
+      () => {
+        console.log('Lawyers table created successfully');
+      },
+      (_, error) => {
+        console.error('Error creating lawyers table:', error);
+        throw error;
+      }
+    );
+  } catch (error) {
+    console.error('Error creating lawyers table:', error);
+    throw error;
   }
 }; 

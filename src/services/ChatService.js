@@ -7,64 +7,9 @@ const STORAGE_KEYS = {
   MESSAGES: 'chat_messages',
   CONVERSATIONS: 'chat_conversations',
   MESSAGE_ID_COUNTER: 'message_id_counter',
-  CONVERSATION_ID_COUNTER: 'conversation_id_counter'
+  CONVERSATION_ID_COUNTER: 'conversation_id_counter',
+  LAWYERS: 'lawyers'
 };
-
-// Тестовые данные для имитации чатов
-const MOCK_CLIENT_NAMES = [
-  'Артем Иванов', 'Елена Смирнова', 'Дмитрий Козлов', 'Анна Морозова', 
-  'Сергей Волков', 'Ольга Новикова', 'Александр Соколов', 'Наталья Петрова',
-  'Михаил Семенов', 'Ирина Федорова', 'Андрей Алексеев', 'Татьяна Васильева',
-  'Павел Макаров', 'Юлия Громова', 'Виктор Кузнецов', 'Мария Орлова',
-  'Денис Лебедев', 'Екатерина Зайцева', 'Максим Степанов', 'Светлана Комарова'
-];
-
-const MOCK_MESSAGES = [
-  'Здравствуйте! Мне нужна юридическая консультация.',
-  'У меня возник вопрос по семейному праву.',
-  'Когда вы можете встретиться для обсуждения моего дела?',
-  'Спасибо за консультацию, это очень помогло!',
-  'Я хотел бы получить дополнительную информацию по моему вопросу.',
-  'Сколько будет стоить ваша услуга?',
-  'Могу я рассчитывать на скидку для постоянных клиентов?',
-  'Мне нужно составить договор аренды, сможете помочь?',
-  'Какие документы мне нужно подготовить для суда?',
-  'Я получил исковое заявление, что мне делать?',
-  'Можно ли решить мою проблему без суда?',
-  'Каковы шансы выиграть это дело?',
-  'Я бы хотел записаться на консультацию.',
-  'Мне нужна ваша помощь в срочном порядке.',
-  'Что вы думаете о моих перспективах в этом деле?',
-  'Прошу вас подготовить необходимые документы как можно скорее.',
-  'Я рекомендовал вас своему коллеге, он скоро свяжется с вами.',
-  'Спасибо за вашу работу, результат превзошел мои ожидания!',
-  'Какие у вас есть свободные даты для встречи на следующей неделе?',
-  'Я изменил свое решение и хотел бы отказаться от услуг.',
-  'Могли бы вы подробнее объяснить, что означает этот пункт в договоре?'
-];
-
-const MOCK_LAWYER_RESPONSES = [
-  'Добрый день! Конечно, я готов вам помочь. В какой области вам требуется консультация?',
-  'Здравствуйте! Да, я специализируюсь на семейном праве. Какой у вас вопрос?',
-  'Я могу встретиться с вами завтра в 15:00 или послезавтра в любое удобное для вас время.',
-  'Всегда рад помочь! Если возникнут дополнительные вопросы, обращайтесь.',
-  'Конечно, какую именно информацию вы хотели бы получить?',
-  'Стоимость моих услуг зависит от сложности дела. Давайте обсудим детали, и я смогу назвать точную сумму.',
-  'Да, для постоянных клиентов у нас действует система скидок.',
-  'Да, я могу помочь составить договор аренды. Мне потребуется информация об объекте и условиях аренды.',
-  'Для суда вам понадобятся следующие документы: паспорт, документы по делу, доказательства вашей позиции.',
-  'Не беспокойтесь, я помогу вам разобраться с исковым заявлением. Пришлите мне его копию для анализа.',
-  'В большинстве случаев есть возможность досудебного урегулирования. Давайте обсудим ваш случай подробнее.',
-  'Для оценки шансов мне нужно ознакомиться со всеми материалами дела. Можем ли мы организовать встречу?',
-  'Буду рад провести консультацию. Когда вам удобно?',
-  'Я понимаю срочность ситуации. Давайте обсудим ваш вопрос прямо сейчас.',
-  'Для более точной оценки перспектив мне нужно ознакомиться с документами по вашему делу.',
-  'Я займусь подготовкой документов немедленно. Они будут готовы к концу недели.',
-  'Спасибо за рекомендацию, это очень ценно для меня!',
-  'Я очень рад, что смог помочь вам достичь положительного результата.',
-  'На следующей неделе я свободен во вторник с 10:00 до 13:00 и в четверг после 15:00.',
-  'Я понимаю ваше решение. Если в будущем вам понадобится юридическая помощь, буду рад сотрудничеству.'
-];
 
 // Initialize chat storage if needed
 const initChatStorage = async () => {
@@ -110,179 +55,15 @@ const getNextId = async (counterKey) => {
 };
 
 const ChatService = {
-  // Создать тестовые чаты и сообщения для адвоката
-  generateMockChatsForLawyer: async (lawyerId) => {
-    try {
-      // Для моментальной генерации - проверяем, есть ли уже чаты
-      const conversations = JSON.parse(await AsyncStorage.getItem(STORAGE_KEYS.CONVERSATIONS)) || [];
-      const existingChats = conversations.filter(c => c.lawyer_id === lawyerId);
-      
-      // Если чаты уже есть, возвращаем их количество сразу
-      if (existingChats.length > 0) {
-        console.log(`У адвоката уже есть ${existingChats.length} чатов`);
-        return existingChats.length;
-      }
-      
-      console.log('Быстрая генерация тестовых чатов для адвоката...');
-      
-      // Ограничим количество чатов и сообщений для ускорения генерации
-      const chatCount = 8; // Меньше чатов для быстрой генерации
-      const maxMessagesPerChat = 3; // Меньше сообщений в каждом чате
-      
-      // Получаем текущие счетчики или инициализируем их
-      let lastMessageIdCounter = parseInt(await AsyncStorage.getItem(STORAGE_KEYS.MESSAGE_ID_COUNTER)) || 0;
-      let lastConversationIdCounter = parseInt(await AsyncStorage.getItem(STORAGE_KEYS.CONVERSATION_ID_COUNTER)) || 0;
-      
-      const newConversations = [];
-      const newMessages = [];
-      
-      for (let i = 0; i < chatCount; i++) {
-        // Создаем клиента
-        const clientId = 1000 + i;
-        const clientName = MOCK_CLIENT_NAMES[i % MOCK_CLIENT_NAMES.length]; // Защита от выхода за границы массива
-        
-        // Создаем идентификаторы
-        lastConversationIdCounter++;
-        const conversationId = lastConversationIdCounter;
-        
-        // Определяем количество сообщений в чате (от 1 до maxMessagesPerChat)
-        const messageCount = Math.floor(Math.random() * maxMessagesPerChat) + 1;
-        
-        // Рассчитываем начальную дату (до 7 дней назад - меньший период для быстрой генерации)
-        const startDate = new Date();
-        startDate.setDate(startDate.getDate() - Math.floor(Math.random() * 7));
-        
-        let lastMessageId = null;
-        let lastMessageDate = startDate;
-        
-        // Создаем сообщения
-        for (let j = 0; j < messageCount; j++) {
-          lastMessageIdCounter++;
-          const messageId = lastMessageIdCounter;
-          
-          // Определяем, кто отправитель (клиент/адвокат)
-          const isClientMessage = j % 2 === 0;
-          
-          // Создаем дату сообщения (каждое следующее на 1-30 минут позже предыдущего)
-          const messageDate = new Date(lastMessageDate);
-          messageDate.setMinutes(messageDate.getMinutes() + Math.floor(Math.random() * 30) + 1);
-          lastMessageDate = messageDate;
-          
-          // Текст сообщения
-          const messageText = isClientMessage 
-            ? MOCK_MESSAGES[Math.floor(Math.random() * MOCK_MESSAGES.length)]
-            : MOCK_LAWYER_RESPONSES[Math.floor(Math.random() * MOCK_LAWYER_RESPONSES.length)];
-          
-          // Создаем сообщение
-          const message = {
-            id: messageId,
-            sender_id: isClientMessage ? clientId : lawyerId,
-            receiver_id: isClientMessage ? lawyerId : clientId,
-            message: messageText,
-            read: true, // все сообщения кроме последнего прочитаны
-            created_at: messageDate.toISOString(),
-            is_from_guest: false
-          };
-          
-          newMessages.push(message);
-          lastMessageId = messageId;
-        }
-        
-        // Создаем случайное непрочитанное сообщение от клиента (с вероятностью 30%)
-        const hasUnreadMessage = Math.random() < 0.3;
-        let unreadCount = 0;
-        
-        if (hasUnreadMessage) {
-          lastMessageIdCounter++;
-          const unreadMessageId = lastMessageIdCounter;
-          
-          // Создаем дату сообщения (15 минут после последнего - меньше для ускорения)
-          const unreadMessageDate = new Date(lastMessageDate);
-          unreadMessageDate.setMinutes(unreadMessageDate.getMinutes() + 15);
-          
-          // Текст сообщения
-          const messageText = MOCK_MESSAGES[Math.floor(Math.random() * MOCK_MESSAGES.length)];
-          
-          // Создаем сообщение
-          const unreadMessage = {
-            id: unreadMessageId,
-            sender_id: clientId,
-            receiver_id: lawyerId,
-            message: messageText,
-            read: false,
-            created_at: unreadMessageDate.toISOString(),
-            is_from_guest: false
-          };
-          
-          newMessages.push(unreadMessage);
-          lastMessageId = unreadMessageId;
-          unreadCount = 1;
-        }
-        
-        // Создаем разговор
-        const conversation = {
-          id: conversationId,
-          client_id: clientId,
-          lawyer_id: lawyerId,
-          last_message_id: lastMessageId,
-          unread_count: unreadCount,
-          created_at: startDate.toISOString(),
-          updated_at: lastMessageDate.toISOString(),
-          has_guest: false,
-          client_name: clientName
-        };
-        
-        newConversations.push(conversation);
-      }
-      
-      console.log(`Быстро сгенерировано ${newConversations.length} чатов и ${newMessages.length} сообщений`);
-      
-      // Сохраняем данные в AsyncStorage
-      await AsyncStorage.setItem(
-        STORAGE_KEYS.CONVERSATIONS, 
-        JSON.stringify([...conversations, ...newConversations])
-      );
-      
-      await AsyncStorage.setItem(
-        STORAGE_KEYS.MESSAGES, 
-        JSON.stringify([...(JSON.parse(await AsyncStorage.getItem(STORAGE_KEYS.MESSAGES)) || []), ...newMessages])
-      );
-      
-      await AsyncStorage.setItem(
-        STORAGE_KEYS.MESSAGE_ID_COUNTER, 
-        lastMessageIdCounter.toString()
-      );
-      
-      await AsyncStorage.setItem(
-        STORAGE_KEYS.CONVERSATION_ID_COUNTER, 
-        lastConversationIdCounter.toString()
-      );
-      
-      return newConversations.length;
-    } catch (error) {
-      console.error('Error generating mock chats:', error);
-      // В случае ошибки, вернуть хотя бы минимальное количество
-      return 5;
-    }
-  },
-
   // Получить все беседы пользователя
   getConversations: async (userId) => {
     try {
       await initChatStorage();
       
-      // Если это адвокат, генерируем тестовые чаты (если их нет)
-      // Проверяем тип пользователя
-      const users = JSON.parse(await AsyncStorage.getItem('users')) || [];
-      const user = users.find(u => u.id === userId);
-      
-      if (user && user.user_type === 'lawyer') {
-        // Генерируем тестовые чаты для адвоката
-        await ChatService.generateMockChatsForLawyer(userId);
-      }
-      
       // Get user info
+      const users = JSON.parse(await AsyncStorage.getItem('users')) || [];
       const lawyers = JSON.parse(await AsyncStorage.getItem('lawyers')) || [];
+      const user = users.find(u => u.id === userId);
       
       if (!user) {
         throw new Error('User not found');
@@ -331,16 +112,33 @@ const ChatService = {
           // The client is talking to a lawyer - get better lawyer info
           const lawyerUser = users.find(u => u.id === conversation.lawyer_id);
           const lawyerInfo = lawyers.find(l => l.user_id === conversation.lawyer_id);
-          lawyerName = lawyerInfo?.name || lawyerUser?.name || lawyerUser?.username || 'Адвокат';
+          
+          // Приоритет: name из профиля адвоката
+          lawyerName = lawyerInfo?.name || lawyerUser?.username || 'Адвокат';
+          console.log(`Lawyer name in conversation ${conversation.id}:`, lawyerName);
+        } else if (user.user_type === 'lawyer') {
+          // Этот пользователь и есть адвокат
+          const lawyerInfo = lawyers.find(l => l.user_id === userId);
+          lawyerName = lawyerInfo?.name || user.username || 'Адвокат';
         }
         
         // Get last message
         const lastMessage = allMessages.find(m => m.id === conversation.last_message_id);
         
+        // Check if we need to update the conversation in storage with the correct lawyer name
+        if (conversation.lawyer_name !== lawyerName && lawyerName !== 'Адвокат') {
+          console.log(`Updating conversation ${conversation.id} with correct lawyer name: ${lawyerName}`);
+          // Find and update in the original array
+          const conversationIndex = allConversations.findIndex(c => c.id === conversation.id);
+          if (conversationIndex !== -1) {
+            allConversations[conversationIndex].lawyer_name = lawyerName;
+          }
+        }
+        
         return {
           ...conversation,
-          lawyer_name: user.user_type === 'client' ? lawyerName : (user.name || user.username),
-          client_name: user.user_type === 'lawyer' ? (isGuestConversation ? 'Гость' : (otherUserName)) : (user.name || user.username),
+          lawyer_name: lawyerName,
+          client_name: isGuestConversation ? 'Гость' : otherUserName,
           last_message: lastMessage?.message || '',
           last_message_time: lastMessage?.created_at || conversation.updated_at,
           has_guest: isGuestConversation
@@ -349,6 +147,9 @@ const ChatService = {
       
       // Sort by most recent first
       enrichedConversations.sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
+      
+      // Save the updated conversations back to storage if we made any changes
+      await AsyncStorage.setItem(STORAGE_KEYS.CONVERSATIONS, JSON.stringify(allConversations));
       
       return enrichedConversations;
     } catch (error) {
@@ -363,11 +164,12 @@ const ChatService = {
       db.transaction(tx => {
         tx.executeSql(
           `SELECT c.*, 
-            u.username as lawyer_name,
+            COALESCE(l.name, u.username) as lawyer_name,
             m.message as last_message,
             m.created_at as last_message_time
            FROM chat_conversations c
            JOIN users u ON c.lawyer_id = u.id
+           LEFT JOIN lawyers l ON c.lawyer_id = l.user_id
            LEFT JOIN chat_messages m ON c.last_message_id = m.id
            WHERE c.client_id = ?
            ORDER BY c.updated_at DESC`,
@@ -563,6 +365,11 @@ const ChatService = {
       const messages = JSON.parse(messagesJson) || [];
       const conversations = JSON.parse(conversationsJson) || [];
       
+      console.log('Current state:', {
+        totalMessages: messages.length,
+        totalConversations: conversations.length
+      });
+      
       // Получаем следующий ID сообщения
       const messageId = await getNextId(STORAGE_KEYS.MESSAGE_ID_COUNTER);
       
@@ -574,6 +381,12 @@ const ChatService = {
         (c.client_id === senderId && c.lawyer_id === receiverId) || 
         (c.client_id === receiverId && c.lawyer_id === senderId)
       );
+      
+      console.log('Existing conversation:', conversation ? {
+        id: conversation.id,
+        client_id: conversation.client_id,
+        lawyer_id: conversation.lawyer_id
+      } : 'Not found');
       
       // Получаем информацию о пользователях
       try {
@@ -589,7 +402,9 @@ const ChatService = {
           
           // Пытаемся получить имя адвоката
           const lawyerInfo = await LawyerService.getLawyerProfile(receiverId);
+          // Приоритет: name из профиля адвоката
           lawyerName = lawyerInfo?.name || lawyerInfo?.username || 'Адвокат';
+          console.log('Lawyer name set from profile:', lawyerName);
         } else if (isGuestReceiver) {
           // Если получатель гость, то отправитель должен быть адвокатом
           clientId = receiverId;
@@ -598,7 +413,9 @@ const ChatService = {
           
           // Пытаемся получить имя адвоката
           const lawyerInfo = await LawyerService.getLawyerProfile(senderId);
+          // Приоритет: name из профиля адвоката
           lawyerName = lawyerInfo?.name || lawyerInfo?.username || 'Адвокат';
+          console.log('Lawyer name set from profile:', lawyerName);
         } else {
           // Проверяем, кто клиент, а кто адвокат из AsyncStorage данных
           const users = JSON.parse(await AsyncStorage.getItem('users')) || [];
@@ -610,17 +427,17 @@ const ChatService = {
             lawyerId = receiverId;
             clientName = senderUser.name || senderUser.username || 'Клиент';
             
-            // Получаем имя адвоката
-            if (receiverUser) {
-              lawyerName = receiverUser.name || receiverUser.username || 'Адвокат';
-            } else {
-              const lawyerInfo = await LawyerService.getLawyerProfile(receiverId);
-              lawyerName = lawyerInfo?.name || lawyerInfo?.username || 'Адвокат';
-            }
+            // Получаем имя адвоката с приоритетом поля name
+            const lawyerInfo = await LawyerService.getLawyerProfile(receiverId);
+            lawyerName = lawyerInfo?.name || receiverUser?.username || 'Адвокат';
+            console.log('Lawyer name set from client-to-lawyer chat:', lawyerName);
           } else if (senderUser && senderUser.user_type === 'lawyer') {
             clientId = receiverId;
             lawyerId = senderId;
-            lawyerName = senderUser.name || senderUser.username || 'Адвокат';
+            // Получаем имя адвоката из профиля с приоритетом поля name
+            const lawyerInfo = await LawyerService.getLawyerProfile(senderId);
+            lawyerName = lawyerInfo?.name || senderUser.username || 'Адвокат';
+            console.log('Lawyer name set from lawyer-to-client chat:', lawyerName);
             
             // Получаем имя клиента
             if (receiverUser) {
@@ -633,7 +450,16 @@ const ChatService = {
             clientId = senderId;
             lawyerId = receiverId;
             clientName = senderUser?.name || senderUser?.username || 'Клиент';
-            lawyerName = receiverUser?.name || receiverUser?.username || 'Адвокат';
+            
+            // Пытаемся получить информацию об адвокате
+            try {
+              const lawyerInfo = await LawyerService.getLawyerProfile(lawyerId);
+              lawyerName = lawyerInfo?.name || receiverUser?.username || 'Адвокат';
+              console.log('Lawyer name set from fallback:', lawyerName);
+            } catch (e) {
+              console.error('Error getting lawyer profile in fallback:', e);
+              lawyerName = receiverUser?.name || receiverUser?.username || 'Адвокат';
+            }
           }
         }
       } catch (err) {
@@ -659,6 +485,20 @@ const ChatService = {
       if (!conversation) {
         // Создаем новую беседу
         const conversationId = await getNextId(STORAGE_KEYS.CONVERSATION_ID_COUNTER);
+        
+        // Получаем дополнительную информацию о профиле адвоката, если не получена ранее
+        if (!lawyerName || lawyerName === 'Адвокат') {
+          try {
+            const lawyersArray = JSON.parse(await AsyncStorage.getItem(STORAGE_KEYS.LAWYERS)) || [];
+            const lawyerProfile = lawyersArray.find(l => l.user_id === lawyerId);
+            if (lawyerProfile && lawyerProfile.name) {
+              lawyerName = lawyerProfile.name;
+              console.log(`Updated lawyer name from lawyer profile: ${lawyerName}`);
+            }
+          } catch (err) {
+            console.error('Error getting lawyer profile for name:', err);
+          }
+        }
         
         conversation = {
           id: conversationId,
@@ -866,7 +706,7 @@ const ChatService = {
           return {
             id: userInfo.id,
             username: userInfo.username,
-            name: lawyer.name,
+            name: lawyer.name || userInfo.username || 'Адвокат',
             specialization: lawyer.specialization,
             experience: lawyer.experience,
             city: lawyer.city,

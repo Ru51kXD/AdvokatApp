@@ -21,7 +21,7 @@ const AdminScreen = () => {
       
       if (count > 0) {
         const lawyersData = await executeQuery(`
-          SELECT l.id, l.specialization, u.username 
+          SELECT l.id, l.name, l.specialization, u.username 
           FROM lawyers l 
           JOIN users u ON l.user_id = u.id 
           LIMIT 20
@@ -409,13 +409,52 @@ const AdminScreen = () => {
         <Text style={styles.secondaryButtonText}>Обновить имена адвокатов</Text>
       </TouchableOpacity>
       
+      <TouchableOpacity
+        style={[styles.button, { backgroundColor: '#ff5722' }]}
+        onPress={async () => {
+          try {
+            setLoading(true);
+            setMessage('Принудительное обновление имен адвокатов...');
+            
+            // Прямой вызов функции обновления имен
+            const result = await LawyerService.updateLawyerNamesInDB();
+            
+            if (result.success) {
+              console.log('Успешно обновлены имена адвокатов:', result);
+              
+              // Проверка обновленных имен
+              const updatedLawyers = await executeQuery('SELECT l.id, l.name, u.username FROM lawyers l JOIN users u ON l.user_id = u.id LIMIT 5');
+              console.log('Примеры обновленных адвокатов:', updatedLawyers);
+              
+              setMessage(`Успешно обновлено ${result.updated} имен адвокатов!`);
+              Alert.alert('Успех', `Принудительно обновлено ${result.updated} имен адвокатов`);
+              
+              // Обновляем список адвокатов на экране
+              checkLawyers();
+            } else {
+              setMessage(`Ошибка: ${result.message || result.error || 'Неизвестная ошибка'}`);
+              Alert.alert('Ошибка', `Не удалось обновить имена: ${result.message || result.error}`);
+            }
+          } catch (error) {
+            console.error('Error forcing lawyer names update:', error);
+            setMessage(`Ошибка: ${error.message || error}`);
+            Alert.alert('Ошибка', `Не удалось обновить имена: ${error.message || error}`);
+          } finally {
+            setLoading(false);
+          }
+        }}
+        disabled={loading}
+      >
+        <Text style={styles.buttonText}>Принудительно обновить имена адвокатов</Text>
+      </TouchableOpacity>
+      
       {lawyers.length > 0 && (
         <View style={styles.lawyersContainer}>
           <Text style={styles.subtitle}>Список адвокатов:</Text>
           {lawyers.map((lawyer, index) => (
             <View key={lawyer.id} style={styles.lawyerItem}>
               <Text style={styles.lawyerText}>
-                {index + 1}. {lawyer.username} - {lawyer.specialization}
+                {index + 1}. {lawyer.name || lawyer.username || 'Адвокат'} - {lawyer.specialization}
               </Text>
             </View>
           ))}

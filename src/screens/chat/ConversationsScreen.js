@@ -183,11 +183,11 @@ const ConversationsScreen = ({ navigation }) => {
 
   // Переход к экрану беседы
   const handleConversationPress = (conversation) => {
-    const title = user.userType === 'client' ? conversation.lawyer_name : conversation.client_name;
+    const title = user.user_type === 'client' ? conversation.lawyer_name : conversation.client_name;
     
     // For lawyers viewing a guest conversation, we need to determine the guest ID
     let guestId = null;
-    if (user.userType === 'lawyer' && conversation.has_guest) {
+    if (user.user_type === 'lawyer' && conversation.has_guest) {
       guestId = conversation.client_id;
     }
     
@@ -252,9 +252,9 @@ const ConversationsScreen = ({ navigation }) => {
 
   // Отображение аватара в зависимости от типа пользователя
   const renderAvatar = (conversation) => {
-    const name = user.userType === 'client' ? conversation.lawyer_name : conversation.client_name;
-    const id = user.userType === 'client' ? conversation.lawyer_id : conversation.client_id;
-    const color = user.userType === 'client' 
+    const name = user.user_type === 'client' ? conversation.lawyer_name : conversation.client_name;
+    const id = user.user_type === 'client' ? conversation.lawyer_id : conversation.client_id;
+    const color = user.user_type === 'client' 
       ? ImageService.getLawyerAvatarColor(id)
       : ImageService.getClientAvatarColor(id);
     const initials = ImageService.getInitials(name);
@@ -271,7 +271,7 @@ const ConversationsScreen = ({ navigation }) => {
 
   // Отображение элемента беседы
   const renderConversationItem = ({ item }) => {
-    const name = user.userType === 'client' ? item.lawyer_name : item.client_name;
+    const name = user.user_type === 'client' ? item.lawyer_name : item.client_name;
     const isGuestConversation = item.has_guest;
     const hasAttachment = item.has_image || item.has_document;
     
@@ -464,7 +464,7 @@ const ConversationsScreen = ({ navigation }) => {
                 </Text>
               </TouchableOpacity>
               
-              {user?.userType === 'lawyer' && (
+              {user?.user_type === 'lawyer' && (
                 <>
                   <TouchableOpacity 
                     style={[styles.filterButton, activeFilter === 'client' && styles.activeFilterButton]}

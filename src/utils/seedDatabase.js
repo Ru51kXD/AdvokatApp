@@ -9,11 +9,19 @@ export const addLawyersDirectly = async () => {
     
     console.log('Начинаем добавление адвокатов в базу данных...');
     
+    // Реальные имена для адвокатов
+    const lawyerRealNames = [
+      'Ерлан Мирзоев', 'Айгуль Сатпаева', 'Нурлан Каримов', 'Данияр Алиев',
+      'Гульназ Бекетова', 'Тимур Ахметов', 'Асель Нурлановна', 'Мурат Жумабаев',
+      'Карлыгаш Исмагулова', 'Бахыт Каирбеков', 'Жанар Искакова', 'Аскар Нуржанов'
+    ];
+    
     // Адвокаты для каждой категории
     const lawyers = [
       // Адвокаты по уголовному праву
       {
         username: 'Адвокат1 Уголовное',
+        name: lawyerRealNames[0],
         email: 'criminal1@example.com',
         password: 'password123',
         phone: '+77001112233',
@@ -27,6 +35,7 @@ export const addLawyersDirectly = async () => {
       },
       {
         username: 'Адвокат2 Уголовное',
+        name: lawyerRealNames[1],
         email: 'criminal2@example.com',
         password: 'password123',
         phone: '+77001112244',
@@ -40,16 +49,17 @@ export const addLawyersDirectly = async () => {
       },
       {
         username: 'Адвокат3 Уголовное',
+        name: lawyerRealNames[2],
         email: 'criminal3@example.com',
         password: 'password123',
         phone: '+77001112255',
         user_type: 'lawyer',
         specialization: 'Уголовное право',
         experience: 8,
-        price_range: '10000-25000 тг',
-        bio: 'Молодой и энергичный адвокат. Специализация на экономических преступлениях и киберпреступности.',
+        price_range: '10000-20000 тг',
+        bio: 'Специализируюсь на защите по делам средней тяжести. Имею большой опыт ведения дел с участием присяжных.',
         city: 'Караганда',
-        address: 'ул. Гоголя, 15, офис 205'
+        address: 'ул. Бухар-Жырау, 55, офис 203'
       },
       
       // Адвокаты по гражданскому праву

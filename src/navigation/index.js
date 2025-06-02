@@ -1,39 +1,40 @@
-import React from 'react';
-import { createStackNavigator } from '@react-navigation/stack';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { createStackNavigator } from '@react-navigation/stack';
+import React from 'react';
 import { Text, View } from 'react-native';
 
 // Auth screens
-import WelcomeScreen from '../screens/WelcomeScreen';
 import LoginScreen from '../screens/LoginScreen';
 import RegisterScreen from '../screens/RegisterScreen';
+import WelcomeScreen from '../screens/WelcomeScreen';
 
 // Client screens
-import SearchScreen from '../screens/client/SearchScreen';
-import LawyerListScreen from '../screens/client/LawyerListScreen';
+import EditProfileScreen from '../screens/client/EditProfileScreen';
 import LawyerDetailScreen from '../screens/client/LawyerDetailScreen';
-import RequestScreen from '../screens/client/RequestScreen';
+import LawyerListScreen from '../screens/client/LawyerListScreen';
 import ClientProfileScreen from '../screens/client/ProfileScreen';
-import ClientRequestsScreen from '../screens/client/RequestsScreen';
 import RequestDetailScreen from '../screens/client/RequestDetailScreen';
+import RequestScreen from '../screens/client/RequestScreen';
+import ClientRequestsScreen from '../screens/client/RequestsScreen';
+import SearchScreen from '../screens/client/SearchScreen';
 
 // Lawyer screens
 import LawyerProfileScreen from '../screens/lawyer/ProfileScreen';
-import LawyerRequestsScreen from '../screens/lawyer/RequestsScreen';
 import LawyerRequestDetailScreen from '../screens/lawyer/RequestDetailScreen';
+import LawyerRequestsScreen from '../screens/lawyer/RequestsScreen';
 
 // Chat screens
-import ConversationsScreen from '../screens/chat/ConversationsScreen';
 import ChatScreen from '../screens/chat/ChatScreen';
+import ConversationsScreen from '../screens/chat/ConversationsScreen';
 import NewChatScreen from '../screens/chat/NewChatScreen';
 
 // Help screen
 import HelpScreen from '../screens/HelpScreen';
 
 // New screens
-import PrivacyAndSecurityScreen from '../screens/PrivacyAndSecurityScreen';
 import BankDetailsScreen from '../screens/BankDetailsScreen';
+import PrivacyAndSecurityScreen from '../screens/PrivacyAndSecurityScreen';
 import SupportScreen from '../screens/SupportScreen';
 
 // Admin screen placeholder
@@ -44,8 +45,8 @@ const AdminScreen = ({ route }) => (
 );
 
 // Context
-import { useAuth } from '../contexts/AuthContext';
 import { COLORS } from '../constants';
+import { useAuth } from '../contexts/AuthContext';
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -117,6 +118,11 @@ const ClientProfileStack = () => (
       name="Profile" 
       component={ClientProfileScreen} 
       options={{ title: 'Профиль' }} 
+    />
+    <Stack.Screen 
+      name="EditProfileScreen" 
+      component={EditProfileScreen} 
+      options={{ title: 'Редактирование профиля' }} 
     />
     <Stack.Screen 
       name="PrivacyAndSecurity" 

@@ -1,31 +1,28 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  FlatList,
-  TextInput,
-  TouchableOpacity,
-  KeyboardAvoidingView,
-  Platform,
-  ActivityIndicator,
-  Image,
-  Modal,
-  Dimensions,
-  Alert,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
-import * as ImagePicker from 'expo-image-picker';
-import * as DocumentPicker from 'expo-document-picker';
-import * as FileSystem from 'expo-file-system';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import {
+    ActivityIndicator,
+    Alert,
+    Dimensions,
+    FlatList,
+    Image,
+    KeyboardAvoidingView,
+    Modal,
+    Platform,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
+import ChatMessage from '../../components/ChatMessage';
 import { COLORS } from '../../constants';
 import { useAuth } from '../../contexts/AuthContext';
 import ChatService from '../../services/ChatService';
-import ChatMessage from '../../components/ChatMessage';
-import { pickImage, pickDocument } from '../../utils/permissions';
+import { pickDocument, pickImage } from '../../utils/permissions';
 
 const ChatScreen = ({ route, navigation }) => {
   const { conversationId, title, guestId } = route.params;
@@ -226,8 +223,19 @@ const ChatScreen = ({ route, navigation }) => {
   // Обновляем заголовок экрана, когда загружены данные разговора
   useEffect(() => {
     if (conversation) {
-      // Получаем более точное имя из данных разговора
-      const updatedTitle = isGuest ? conversation.lawyer_name || title : title;
+      // Определяем имя адвоката или собеседника для заголовка
+      let updatedTitle = title;
+      
+      // Для клиента (или гостя) показываем имя адвоката
+      if (isGuest || (authState.user && authState.user.user_type === 'client')) {
+        updatedTitle = conversation.lawyer_name || title || 'Адвокат';
+        console.log(`Setting chat title to lawyer name: ${updatedTitle}`);
+      } 
+      // Для адвоката показываем имя клиента
+      else if (authState.user && authState.user.user_type === 'lawyer') {
+        updatedTitle = conversation.client_name || title || 'Клиент';
+        console.log(`Setting chat title to client name: ${updatedTitle}`);
+      }
       
       // Обновляем заголовок в навигации
       navigation.setOptions({
@@ -242,7 +250,7 @@ const ChatScreen = ({ route, navigation }) => {
         )
       });
     }
-  }, [conversation, navigation, title, isGuest]);
+  }, [conversation, navigation, title, isGuest, authState.user]);
 
   // Имитация "печатает..." при вводе сообщения
   useEffect(() => {

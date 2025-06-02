@@ -116,7 +116,9 @@ const LawyerDetailScreen = ({ route, navigation }) => {
       const lawyerId = lawyer.user_id;
       const firstMessage = 'Здравствуйте! Я хотел бы обсудить юридический вопрос.';
       
-      console.log('Создаем чат между', senderId, 'и', lawyerId);
+      // Определяем имя адвоката с приоритетом на поле name
+      const lawyerName = lawyer.name || lawyer.username || 'Адвокат';
+      console.log('Создаем чат между', senderId, 'и', lawyerId, 'с адвокатом:', lawyerName);
       
       const result = await ChatService.sendMessage(
         senderId, 
@@ -127,7 +129,7 @@ const LawyerDetailScreen = ({ route, navigation }) => {
       // Переходим к экрану чата
       navigation.navigate('ChatScreen', {
         conversationId: result.conversation.id,
-        title: safeText(lawyer.name) || safeText(lawyer.username) || 'Адвокат',
+        title: lawyerName,
         lawyerId: lawyer.user_id || lawyer.id,
         guestId: !user ? senderId : null
       });
@@ -277,7 +279,7 @@ const LawyerDetailScreen = ({ route, navigation }) => {
         <View style={styles.header}>
           {renderAvatar()}
           <View style={styles.headerInfo}>
-            <Text style={styles.name}>{username || 'Адвокат'}</Text>
+            <Text style={styles.name}>{lawyer.name || lawyer.username || 'Адвокат'}</Text>
             <Text style={styles.specialization}>{specialization || 'Юрист'}</Text>
             {lawyer.rating > 0 && renderRating(lawyer.rating)}
           </View>

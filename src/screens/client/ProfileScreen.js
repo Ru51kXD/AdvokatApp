@@ -1,27 +1,26 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { 
-  View, 
-  StyleSheet, 
-  Text, 
-  ScrollView, 
-  TouchableOpacity,
-  Image,
-  Alert,
-  Switch,
-  ActivityIndicator,
-  Platform,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
+import React, { useCallback, useEffect, useState } from 'react';
+import {
+    ActivityIndicator,
+    Alert,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Switch,
+    Text,
+    TouchableOpacity,
+    View
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { COLORS } from '../../constants';
-import Button from '../../components/Button';
-import { useAuth } from '../../contexts/AuthContext';
-import { RequestService } from '../../services/RequestService';
-import ImageService from '../../services/ImageService';
-import UserAvatar from '../../components/UserAvatar';
 import AvatarPickerModal from '../../components/AvatarPickerModal';
+import Button from '../../components/Button';
+import UserAvatar from '../../components/UserAvatar';
+import { COLORS } from '../../constants';
+import { useAuth } from '../../contexts/AuthContext';
+import ImageService from '../../services/ImageService';
+import { RequestService } from '../../services/RequestService';
 
 const ClientProfileScreen = ({ navigation }) => {
   const { authState, signOut } = useAuth();
@@ -98,20 +97,14 @@ const ClientProfileScreen = ({ navigation }) => {
   };
 
   const handleEditProfile = () => {
-    // Переход к экрану редактирования профиля
-    Alert.alert(
-      'Редактирование профиля',
-      'Здесь вы можете изменить свои личные данные.',
-      [
-        { text: 'Отмена', style: 'cancel' },
-        { 
-          text: 'Продолжить', 
-          onPress: () => {
-            Alert.alert('Информация', 'Функция редактирования профиля будет доступна в следующем обновлении.');
-          }
-        }
-      ]
-    );
+    // Navigate to the EditProfileScreen
+    navigation.navigate('EditProfileScreen', {
+      userData: {
+        username: authState?.user?.username || '',
+        email: authState?.user?.email || '',
+        phone: authState?.user?.phone || '',
+      }
+    });
   };
 
   const handleToggleNotifications = () => {

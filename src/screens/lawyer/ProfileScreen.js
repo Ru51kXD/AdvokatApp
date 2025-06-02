@@ -1,19 +1,18 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import {   View,   StyleSheet,   Text,   ScrollView,   TouchableOpacity,  Image,  Alert,  Switch,  ActivityIndicator,  Platform } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, Platform, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { COLORS, KAZAKHSTAN_CITIES, LAW_AREAS, PRICE_RANGES } from '../../constants';
+import AvatarPickerModal from '../../components/AvatarPickerModal';
 import Button from '../../components/Button';
 import Input from '../../components/Input';
 import Picker from '../../components/Picker';
-import { useAuth } from '../../contexts/AuthContext';
-import { LawyerService } from '../../services/LawyerService';
-import { RequestService } from '../../services/RequestService';
-import ImageService from '../../services/ImageService';
 import UserAvatar from '../../components/UserAvatar';
-import AvatarPickerModal from '../../components/AvatarPickerModal';
+import { COLORS, KAZAKHSTAN_CITIES, LAW_AREAS, PRICE_RANGES } from '../../constants';
+import { useAuth } from '../../contexts/AuthContext';
+import ImageService from '../../services/ImageService';
+import { LawyerService } from '../../services/LawyerService';
 
 const LawyerProfileScreen = ({ navigation }) => {
   const { authState, signOut } = useAuth();
@@ -445,6 +444,7 @@ const LawyerProfileScreen = ({ navigation }) => {
                 title="Сохранить"
                 onPress={handleSaveProfile}
                 style={styles.saveButton}
+                loading={loading}
               />
             </View>
           </View>

@@ -1,16 +1,16 @@
+import { Ionicons } from '@expo/vector-icons';
 import React, { useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  Image,
-  TouchableOpacity,
-  Linking,
-  Alert,
-  ActivityIndicator
+    ActivityIndicator,
+    Alert,
+    Image,
+    Linking,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { COLORS, FONTS, SIZES } from '../constants';
 import { useAuth } from '../contexts/AuthContext';
 import ChatService from '../services/ChatService';
@@ -61,7 +61,7 @@ const LawyerProfileScreen = ({ route, navigation }) => {
       // Переходим к экрану чата
       navigation.navigate('ChatScreen', {
         conversationId: result.conversation.id,
-        title: lawyer.username || 'Адвокат',
+        title: lawyer.name || lawyer.username || 'Адвокат',
         guestId: !authState.isAuthenticated ? senderId : null
       });
     } catch (error) {

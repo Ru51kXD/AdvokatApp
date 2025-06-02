@@ -32,11 +32,35 @@ const LawyerCard = ({ lawyer, onPress }) => {
     return null;
   }
 
+  // Debug output for lawyer data
+  console.log('LawyerCard received lawyer:', {
+    id: lawyer.id,
+    name: lawyer.name,
+    username: lawyer.username,
+    keys: Object.keys(lawyer)
+  });
+
   // Extract values from possibly nested objects
   const specialization = safeText(lawyer.specialization);
   const priceRange = safeText(lawyer.price_range);
   const city = safeText(lawyer.city);
-  const username = lawyer.name || lawyer.username;
+  
+  // More robust handling of lawyer name
+  let username;
+  if (lawyer.name) {
+    username = lawyer.name;
+    console.log(`Using lawyer.name: ${username}`);
+  } else if (lawyer.username) {
+    username = lawyer.username;
+    console.log(`Using lawyer.username: ${username}`);
+  } else if (lawyer.specialization) {
+    // Fallback to specialization-based name if all else fails
+    username = `Адвокат (${lawyer.specialization})`;
+    console.log(`Using fallback name: ${username}`);
+  } else {
+    username = 'Адвокат';
+    console.log('Using default name: Адвокат');
+  }
 
   // Handle message button press
   const handleMessagePress = async (e) => {
@@ -59,6 +83,10 @@ const LawyerCard = ({ lawyer, onPress }) => {
       const guestId = "guest_" + Math.floor(Math.random() * 1000000);
       const senderId = user ? user.id : guestId;
       
+      // Получаем полное имя адвоката для чата
+      const lawyerName = lawyer.name || lawyer.username || 'Адвокат';
+      console.log(`Starting chat with lawyer: ${lawyerName} (ID: ${lawyerId})`);
+      
       // Отправляем первое сообщение и создаем чат
       const firstMessage = "Здравствуйте! Меня интересует консультация по юридическому вопросу.";
       const result = await ChatService.sendMessage(
@@ -70,7 +98,8 @@ const LawyerCard = ({ lawyer, onPress }) => {
       // Переходим к экрану чата
       navigation.navigate('ChatScreen', {
         conversationId: result.conversation.id,
-        title: lawyer.name || lawyer.username || 'Адвокат',
+        title: lawyerName,
+        lawyerId: lawyer.user_id,
         guestId: !user ? senderId : null
       });
     } catch (err) {
@@ -147,7 +176,7 @@ const LawyerCard = ({ lawyer, onPress }) => {
         <View style={styles.header}>
           {renderAvatar()}
           <View style={styles.headerInfo}>
-            <Text style={styles.name}>{username || 'Адвокат'}</Text>
+            <Text style={styles.name}>{username}</Text>
             <Text style={styles.specialization}>
               {specialization || 'Общая практика'}
             </Text>

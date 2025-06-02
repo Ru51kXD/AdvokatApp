@@ -3,7 +3,9 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Alert } from 'react-native';
 import {
     createUser,
-    getUsers
+    getUsers,
+    initDatabase,
+    updateUser as updateUserInDB
 } from '../database/database';
 import { LawyerService } from '../services/LawyerService';
 
@@ -84,20 +86,29 @@ export const AuthProvider = ({ children }) => {
       
       if (user) {
         console.log('AuthContext: Login successful', { id: user.id, email: user.email, type: user.user_type });
-        // Если пользователь найден, сохраняем его в AsyncStorage
-        await AsyncStorage.setItem('user', JSON.stringify(user));
+        
+        // Если пользователь адвокат, получаем его профиль
+        let userWithProfile = { ...user };
+        if (user.user_type === 'lawyer') {
+          const lawyerProfile = await LawyerService.getLawyerProfile(user.id);
+          if (lawyerProfile) {
+            userWithProfile = { ...user, lawyer_profile: lawyerProfile };
+          }
+        }
+        
+        // Сохраняем полные данные пользователя в AsyncStorage
+        await AsyncStorage.setItem('user', JSON.stringify(userWithProfile));
         
         // Обновляем state
         setAuthState({
-          user,
+          user: userWithProfile,
           isAuthenticated: true
         });
         
-        return { success: true };
+        return { success: true, user: userWithProfile };
       } else {
         console.log('AuthContext: Login failed - invalid credentials');
-        // Если пользователь не найден, возвращаем ошибку
-        return { success: false, error: 'Неверный email или пароль' };
+        return { success: false, error: 'Ошибка: неверный адрес электронной почты и пароль' };
       }
     } catch (error) {
       console.error('Error signing in:', error);
@@ -135,12 +146,14 @@ export const AuthProvider = ({ children }) => {
       const newUser = await createUser(userToCreate);
       
       // Если регистрируется адвокат, создаем для него профиль
+      let userWithProfile = { ...newUser };
       if (userData.user_type === 'lawyer' && userData.lawyer_profile) {
         const { createLawyer } = await import('../database/database');
         
         // Создаем профиль адвоката
-        await createLawyer({
+        const lawyerProfile = await createLawyer({
           user_id: newUser.id,
+          name: userData.lawyer_profile.name || newUser.username,
           specialization: userData.lawyer_profile.specialization,
           experience: parseInt(userData.lawyer_profile.experience) || 0,
           price_range: userData.lawyer_profile.price_range,
@@ -148,21 +161,62 @@ export const AuthProvider = ({ children }) => {
           address: userData.lawyer_profile.address,
           bio: userData.lawyer_profile.bio
         });
+        
+        userWithProfile = { ...newUser, lawyer_profile: lawyerProfile };
       }
       
-      // Сохраняем пользователя в AsyncStorage
-      await AsyncStorage.setItem('user', JSON.stringify(newUser));
+      // Сохраняем полные данные пользователя в AsyncStorage
+      await AsyncStorage.setItem('user', JSON.stringify(userWithProfile));
       
       // Обновляем state
       setAuthState({
-        user: newUser,
+        user: userWithProfile,
         isAuthenticated: true
       });
       
-      return { success: true };
+      return { success: true, user: userWithProfile };
     } catch (error) {
       console.error('Error signing up:', error);
       return { success: false, error: 'Произошла ошибка при регистрации' };
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Функция для обновления данных пользователя
+  const updateUser = async (userId, userData) => {
+    try {
+      setIsLoading(true);
+      
+      // Обновляем пользователя в базе данных
+      const updatedUser = await updateUserInDB(userId, userData);
+      
+      if (!updatedUser) {
+        return { success: false, error: 'Пользователь не найден' };
+      }
+      
+      // Получаем текущие данные пользователя из контекста
+      const currentUser = authState.user;
+      
+      // Объединяем текущие данные с обновленными
+      const updatedAuthUser = {
+        ...currentUser,
+        ...updatedUser
+      };
+      
+      // Сохраняем обновленные данные в AsyncStorage
+      await AsyncStorage.setItem('user', JSON.stringify(updatedAuthUser));
+      
+      // Обновляем state
+      setAuthState({
+        user: updatedAuthUser,
+        isAuthenticated: true
+      });
+      
+      return { success: true, user: updatedAuthUser };
+    } catch (error) {
+      console.error('Error updating user:', error);
+      return { success: false, error: 'Произошла ошибка при обновлении профиля' };
     } finally {
       setIsLoading(false);
     }
@@ -223,7 +277,8 @@ export const AuthProvider = ({ children }) => {
     signIn,
     signUp,
     signOut,
-    demoLogin
+    demoLogin,
+    updateUser
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

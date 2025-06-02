@@ -1,6 +1,15 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { db, executeQuery, getDatabase, getLawyerByUserId, getUserById, initDatabase } from '../database/database';
 
+// Import the same STORAGE_KEYS used in database.js
+const STORAGE_KEYS = {
+  USERS: 'users',
+  LAWYERS: 'lawyers',
+  REVIEWS: 'reviews',
+  REQUESTS: 'requests',
+  ID_COUNTER: 'id_counter'
+};
+
 export const LawyerService = {
   // Get lawyer profile by user ID
   getLawyerProfile: async (userId) => {
@@ -39,8 +48,8 @@ export const LawyerService = {
     try {
       await initDatabase();
       
-      // Get lawyers array
-      const lawyers = JSON.parse(await AsyncStorage.getItem('lawyers')) || [];
+      // Get lawyers array from AsyncStorage using the correct key
+      const lawyers = JSON.parse(await AsyncStorage.getItem(STORAGE_KEYS.LAWYERS)) || [];
       
       // Find lawyer index
       const lawyerIndex = lawyers.findIndex(l => l.user_id === userId);
@@ -56,8 +65,26 @@ export const LawyerService = {
         updated_at: new Date().toISOString()
       };
       
-      // Save updated lawyers array
-      await AsyncStorage.setItem('lawyers', JSON.stringify(lawyers));
+      // Save updated lawyers array with the correct key
+      await AsyncStorage.setItem(STORAGE_KEYS.LAWYERS, JSON.stringify(lawyers));
+      
+      // Also update the SQL database
+      try {
+        // Update each field individually in the SQL database
+        for (const [key, value] of Object.entries(profileData)) {
+          if (key !== 'updated_at') { // Skip the timestamp
+            await executeQuery(
+              `UPDATE lawyers SET ${key} = ? WHERE user_id = ?`,
+              [value, userId]
+            );
+          }
+        }
+        
+        console.log('Profile updated in SQL database');
+      } catch (sqlError) {
+        console.error('Error updating profile in SQL database:', sqlError);
+        // Continue anyway since AsyncStorage was updated
+      }
       
       return { success: true };
     } catch (error) {
@@ -91,8 +118,12 @@ export const LawyerService = {
         }
         
         let query = `
-          SELECT l.id, l.user_id, l.specialization, l.experience, l.price_range, l.bio, l.rating, l.city, l.address, 
-                 u.username as name, u.username, u.email, u.phone
+          SELECT l.id, l.user_id, 
+                 l.name AS lawyer_name, 
+                 u.username AS user_username, 
+                 l.specialization, l.experience, 
+                 l.price_range, l.bio, l.rating, l.city, l.address, 
+                 u.email, u.phone
           FROM lawyers l
           JOIN users u ON l.user_id = u.id
           WHERE 1=1
@@ -180,7 +211,26 @@ export const LawyerService = {
           const result = await executeQuery(query, queryParams);
           if (result && result.length > 0) {
             console.log(`Direct query returned ${result.length} lawyers`);
-            resolve(result);
+            
+            // Map the result properly to include name and username
+            const mappedLawyers = result.map(lawyer => ({
+              id: lawyer.id,
+              user_id: lawyer.user_id,
+              name: lawyer.lawyer_name,
+              username: lawyer.user_username,
+              specialization: lawyer.specialization,
+              experience: lawyer.experience,
+              price_range: lawyer.price_range,
+              bio: lawyer.bio,
+              rating: lawyer.rating,
+              city: lawyer.city,
+              address: lawyer.address,
+              email: lawyer.email,
+              phone: lawyer.phone
+            }));
+            
+            console.log(`Mapped ${mappedLawyers.length} lawyers with proper fields`);
+            resolve(mappedLawyers);
             return;
           }
           
@@ -197,11 +247,12 @@ export const LawyerService = {
                     
                     for (let i = 0; i < rows.length; i++) {
                       const lawyer = rows.item(i);
-                      console.log(`Processing lawyer ${i+1}:`, lawyer.id, lawyer.username);
+                      console.log(`Processing lawyer ${i+1}:`, lawyer.id, lawyer.lawyer_name || lawyer.user_username);
                       lawyers.push({
                         id: lawyer.id,
                         user_id: lawyer.user_id,
-                        username: lawyer.username,
+                        name: lawyer.lawyer_name,
+                        username: lawyer.user_username,
                         specialization: lawyer.specialization,
                         experience: lawyer.experience,
                         price_range: lawyer.price_range,
@@ -365,6 +416,14 @@ export const LawyerService = {
     // Price ranges
     const priceRanges = ['5000-15000 тг', '15000-30000 тг', '30000-50000 тг', '50000-100000 тг'];
     
+    // Казахстанские имена для адвокатов
+    const lawyerNames = [
+      'Айдар Нурланов', 'Динара Касымова', 'Асель Сериков', 'Ержан Мусин',
+      'Гульнара Алимова', 'Марат Джумабаев', 'Айжан Бектурова', 'Самал Сарсенов',
+      'Руслан Ахметов', 'Зарина Искакова', 'Азат Токаев', 'Сауле Манапова',
+      'Аслан Шамшиев', 'Гульназ Турсунов', 'Санжар Назаров', 'Айнур Громова'
+    ];
+    
     // Helper functions
     const getRandomItem = (array) => array[Math.floor(Math.random() * array.length)];
     const getRandomExperience = () => Math.floor(Math.random() * 28) + 3;
@@ -377,12 +436,15 @@ export const LawyerService = {
         specializations.forEach(specialization => {
           // Create 3 lawyers for each specialization
           for (let i = 0; i < 3; i++) {
+            const lawyerIndex = lawyers.length;
+            const realName = lawyerNames[lawyerIndex % lawyerNames.length];
             const firstName = `Адвокат${lawyers.length + 1}`;
             const lastName = `${specialization.split(' ')[0]}`;
             const username = `${firstName}${lastName}`;
             
             const lawyer = {
               username: username,
+              name: realName,
               email: `${username.toLowerCase()}@example.com`,
               password: 'password123',
               phone: `+7${Math.floor(Math.random() * 1000000000).toString().padStart(9, '0')}`,
@@ -414,11 +476,11 @@ export const LawyerService = {
                   
                   // 2. Insert lawyer record
                   tx.executeSql(
-                    `INSERT INTO lawyers (user_id, specialization, experience, price_range, bio, city, address)
-                     VALUES (?, ?, ?, ?, ?, ?, ?)`,
-                    [userId, lawyer.specialization, lawyer.experience, lawyer.price_range, lawyer.bio, lawyer.city, lawyer.address],
+                    `INSERT INTO lawyers (user_id, name, specialization, experience, price_range, bio, city, address)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+                    [userId, lawyer.name, lawyer.specialization, lawyer.experience, lawyer.price_range, lawyer.bio, lawyer.city, lawyer.address],
                     (_, result) => {
-                      console.log(`Created lawyer: ${lawyer.username}, specialization: ${lawyer.specialization}`);
+                      console.log(`Created lawyer: ${lawyer.name} (${lawyer.username}), specialization: ${lawyer.specialization}`);
                     },
                     (_, error) => {
                       console.error('Error creating lawyer record:', error);
@@ -503,6 +565,7 @@ export const LawyerService = {
                   const firstName = getRandomItem(firstNames);
                   const lastName = getRandomItem(lastNames);
                   const username = `${firstName} ${lastName}`;
+                  const fullName = `${firstName} ${lastName}`; // Реальное имя для поля name
                   
                   // Уникальный email с меткой времени
                   const email = `${firstName.toLowerCase()}.${lastName.toLowerCase()}.${timestamp + lawyerIndex}@example.com`;
@@ -523,13 +586,13 @@ export const LawyerService = {
                       
                       // Добавляем запись адвоката
                       tx.executeSql(
-                        `INSERT INTO lawyers (user_id, specialization, experience, price_range, bio, city, address, rating)
-                         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-                        [userId, specialization, experience, priceRange, bio, city, address, rating],
+                        `INSERT INTO lawyers (user_id, name, specialization, experience, price_range, bio, city, address, rating)
+                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                        [userId, fullName, specialization, experience, priceRange, bio, city, address, rating],
                         (_, result) => {
                           successCount++;
-                          addedLawyers.push({ username, specialization });
-                          console.log(`Создан адвокат ${username} (${specialization})`);
+                          addedLawyers.push({ username, name: fullName, specialization });
+                          console.log(`Создан адвокат ${fullName} (${specialization})`);
                         },
                         (_, error) => {
                           console.error(`Ошибка при создании записи адвоката для ${username}:`, error);
@@ -645,36 +708,52 @@ export const LawyerService = {
       ];
       
       // Получаем всех пользователей-адвокатов
-      const lawyerUsers = await executeQuery('SELECT u.id, u.username FROM users u JOIN lawyers l ON u.id = l.user_id WHERE u.user_type = "lawyer"');
+      const lawyerUsers = await executeQuery('SELECT l.id, l.user_id, l.name, u.username, u.id as user_table_id FROM lawyers l JOIN users u ON l.user_id = u.id WHERE u.user_type = "lawyer"');
       
       if (!lawyerUsers || lawyerUsers.length === 0) {
         console.log('Адвокаты не найдены в базе данных');
         return { success: false, message: 'Адвокаты не найдены' };
       }
       
+      console.log('Текущие данные адвокатов перед обновлением:', lawyerUsers.slice(0, 3));
+      
       let updateCount = 0;
       
-      // Обновляем имена адвокатов
-      for (let i = 0; i < lawyerUsers.length; i++) {
-        const lawyerUser = lawyerUsers[i];
-        const newName = lawyerNames[i % lawyerNames.length];
+      // Обновляем каждого адвоката
+      for (const lawyer of lawyerUsers) {
+        // Выбираем случайное имя из списка
+        const randomName = lawyerNames[Math.floor(Math.random() * lawyerNames.length)];
         
-        if (lawyerUser.username !== newName) {
-          try {
-            await executeQuery('UPDATE users SET username = ? WHERE id = ?', [newName, lawyerUser.id]);
-            updateCount++;
-            console.log(`Обновлено имя адвоката ID ${lawyerUser.id}: ${lawyerUser.username} -> ${newName}`);
-          } catch (updateError) {
-            console.error(`Ошибка при обновлении адвоката ID ${lawyerUser.id}:`, updateError);
-          }
+        try {
+          // Обновляем имя адвоката в таблице lawyers
+          await executeQuery(
+            'UPDATE lawyers SET name = ? WHERE id = ?',
+            [randomName, lawyer.id]
+          );
+          
+          // Также обновляем имя пользователя в таблице users
+          await executeQuery(
+            'UPDATE users SET username = ? WHERE id = ?',
+            [randomName, lawyer.user_table_id]
+          );
+          
+          console.log(`Обновлен адвокат ID ${lawyer.id}: имя установлено на "${randomName}"`);
+          updateCount++;
+        } catch (err) {
+          console.error('Ошибка при обновлении имени адвоката:', err);
         }
       }
       
-      console.log(`Успешно обновлено ${updateCount} имен адвокатов`);
+      // Проверяем обновленные данные
+      const updatedLawyers = await executeQuery('SELECT l.id, l.user_id, l.name, u.username FROM lawyers l JOIN users u ON l.user_id = u.id WHERE u.user_type = "lawyer" LIMIT 5');
+      console.log('Примеры обновленных адвокатов:', updatedLawyers);
+      
+      console.log(`Обновлено имен адвокатов: ${updateCount} из ${lawyerUsers.length}`);
+      
       return { success: true, updated: updateCount };
     } catch (error) {
-      console.error('Ошибка при обновлении имен адвокатов в базе данных:', error);
-      throw error;
+      console.error('Ошибка при обновлении имен адвокатов:', error);
+      return { success: false, error: error.message };
     }
   }
 }; 
